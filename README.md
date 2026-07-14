@@ -1,102 +1,63 @@
-# SillyTavern 同人小说世界书模板
+# TauriTavern Agent 同人小说生成系统
 
-基于角色状态系统，自动生成 SillyTavern 兼容的世界书（Lorebook）和叙事者角色卡。
+基于 [TauriTavern](https://tauritavern.github.io/) Agent 模式，为同人小说创作生成成套配置：Agent 配置档案、SKILLS 知识包、角色卡和前端美化。
 
 ## 快速开始
-
-### 前置条件
-
-- Python 3.7+
-- PyYAML
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 初始化项目（四选一）
-
-1. **Use this template**（推荐）——GitHub仓库主页点击「Use this template」→「Create a new repository」，基于当前主分支生成**全新独立仓库**。
-2. **Release 源码归档**——在 [Releases](../../releases) 页下载对应版本的 `Source code (zip/tar.gz)`，解压即得。
-3. **`degit`**（CLI 用户）：
-   ```bash
-   npx degit WZzhaoyi/sillytavern-worldbook-template my-project
-   ```
-   一行命令拉取最新主分支快照，无 git 历史。
-4. **`git clone`**（持续开发）：
-   ```bash
-   git clone https://github.com/WZzhaoyi/sillytavern-worldbook-template.git my-project
-   ```
-
-### 使用步骤
-
-1. 用上述任一方式建立项目，开启 AGENTS 对话
-2. 编辑 `AGENTS.md` 第 2 节配置区，填入你的作品信息
-3. 在 `literature/` 下创建角色档案、场景剧本等素材文件
+1. 编辑 `AGENTS.md` 第 2 节配置区，填入作品名、状态维度等
+2. 在 `literature/` 下创建角色档案和场景剧本
+3. 在 `skills/` 下按模板填充写作风格、状态系统、视角、世界观和角色设定
 4. 运行生成脚本：
-   ```bash
-   python scripts/generate_sillytavern.py
-   ```
-5. 将 `output/` 下生成的 JSON 文件导入 SillyTavern
 
-### 转换角色阶段数据格式
+```bash
+python scripts/generate.py
+```
 
-角色阶段数据可在 JSON/YAML 之间批量转换，脚本会同步更新 `AGENTS.md` 中的 `character_generation.stages_format`：
+5. 将 `output/` 下生成的文件导入 TauriTavern：
+
+| 文件 | 导入方式 |
+|------|---------|
+| `{作品名}角色卡.json` | Characters → Import |
+| `{作品名}.agent-profile.json` | Agent 系统面板 → 配置档案 → 导入 |
+| `{作品名}.ttskill` | Agent 系统面板 → SKILLS → 导入 |
+
+6. 将 Agent Profile 设为 Active Profile，开启 Agent Mode 即可开始创作
+
+## 转换角色阶段数据格式
+
+`_stages` 文件可在 JSON 与 YAML 之间批量转换：
 
 ```bash
 python scripts/convert_stages_format.py yaml
 python scripts/convert_stages_format.py json
 ```
 
-默认转换 `literature/characters/*_stages.{json|yaml|yml}`，成功后删除源格式文件。可加 `--keep-source` 保留源文件，或用 `--dry-run` 预览操作。
-
-如需修复已有阶段文件的兼容格式（例如 YAML 中 `characters:` 下未缩进的列表，或 JSON 中常见的单引号、尾随逗号、字符串内未转义双引号），可运行：
-
-```bash
-python scripts/convert_stages_format.py yaml --repair
-python scripts/convert_stages_format.py json --repair
-```
-
-### 启用角色状态管理（推荐）
-
-`_stages.json` 或 `_stages.yaml` 仅声明状态结构——要让变量**自动计算**与**阶段内容按区间裁剪**真正生效，需要在 SillyTavern 内安装运行时：
-
-1. **安装 JS-Slash-Runner 扩展**
-   - 在 SillyTavern「扩展」→「安装扩展」中填入：
-     ```
-     https://github.com/n0vi028/JS-Slash-Runner
-     ```
-   - 安装后启用扩展。
-
-2. **导入角色状态管理脚本**
-   - 打开 JS-Slash-Runner 扩展面板 →「脚本管理」→「新建脚本」
-   - 脚本内容填入（仅此一行）：
-     ```javascript
-     import 'https://testingcf.jsdelivr.net/gh/WZzhaoyi/tavern_helper/dist/角色状态管理/index.js'
-     ```
-   - 保存并启用该脚本。
-
-启用后，LLM 回复末尾输出的 `_.set(...)` 指令会被自动执行，`<character_states>` 块内的阶段内容会依据当前数值动态裁剪注入。未安装扩展时，世界书和角色卡仍可正常使用，但状态数值和阶段切换需手动维护。
-
 ## 项目结构
 
 ```
-project/
-├── CLAUDE.md                 # Claude Code 项目入口
-├── AGENTS.md                 # 配置中心与完整文档
-├── literature/
-│   ├── characters/           # 角色档案（.md + _stages.{json|yaml}）
-│   ├── scenarios/            # 场景剧本（含 YAML Frontmatter）
-│   ├── fanfic/               # 原始素材（【标题】(关键词) 格式）
-│   ├── original/             # 原著文本（可选）
-│   └── vocab/                # 参考词库（可选）
-├── scripts/
-│   └── generate_sillytavern.py
-└── output/                   # 生成的世界书和角色卡
+├── AGENTS.md         # 配置中心与完整文档
+├── literature/       # 角色档案、场景剧本、风格参考
+├── skills/           # SKILLS 知识包（写作风格、状态系统、视角、世界观、角色设定）
+├── theme/            # 前端美化 CSS（可选）
+├── scripts/          # 生成脚本
+└── output/           # 生成产物
 ```
 
 ## 详细文档
 
-完整的配置说明、角色生成工作流、文件格式规范等，请参阅 [AGENTS.md](AGENTS.md)。
+完整的配置说明、工作流步骤和文件格式规范，请参阅 [AGENTS.md](AGENTS.md)。
+
+## 参考
+
+- [TauriTavern 官网](https://tauritavern.github.io/)
+- [Agent 系统架构](https://tauritavern.github.io/architecture/agent.html)
+- [Agent Profile 配置档案](https://tauritavern.github.io/agent/profiles.html)
+- [SKILLS 知识包](https://tauritavern.github.io/agent/skills.html)
+- [创作者适配指南](https://tauritavern.github.io/agent/creator-guide.html)
 
 ## 许可证
 
