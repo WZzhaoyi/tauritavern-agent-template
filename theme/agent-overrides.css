@@ -1,0 +1,23 @@
+/* ==========================================================================
+   Agent 面板主题覆盖
+   如需自定义 Agent 面板外观，编辑以下变量并导入 TauriTavern 主题。
+   导入后 Agent 系统面板、运行时间线、SKILLS 预览等界面将自动适配。
+   ========================================================================== */
+
+/* 通用 Agent 面板变量 */
+/* .ttas-root {
+/*   --ttas-accent: var(--SmartThemeQuoteColor);
+/*   --ttas-border: color-mix(in srgb, var(--SmartThemeBorderColor) 82%, var(--SmartThemeBodyColor) 18%);
+/*   --ttas-surface: color-mix(in srgb, var(--SmartThemeBlurTintColor) 86%, transparent);
+/*   --ttas-radius: 8px;
+/* } */
+
+/* 时间线变量 */
+/* #ttas_agent_run_timeline {
+/*   --ttas-run-panel-bg: rgb(20 22 26 / 0.82);
+/*   --ttas-run-panel-accent: #9fc7ff;
+/*   --ttas-run-tone-read: #8eb6ff;
+/*   --ttas-run-tone-write: #82d497;
+/*   --ttas-run-tone-commit: #dcc56f;
+/*   --ttas-run-tone-error: #ff9b93;
+/* } */
