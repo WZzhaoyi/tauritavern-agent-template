@@ -1,20 +1,26 @@
-# TauriTavern Agent 同人小说生成系统
+# TauriTavern Agent 角色卡套件模板
 
-基于 [TauriTavern](https://tauritavern.github.io/)，从同一份创作源数据生成 Agent 或非 Agent 角色卡套件。
+基于 [TauriTavern](https://tauritavern.github.io/) 的角色卡套件构建模板，适用于同人小说、互动叙事和多角色扮演项目。它从同一份创作源数据生成 Agent 或非 Agent 目标产物。
 
 角色卡承载文学与扮演指南；传统世界书承载可复用角色、设定和背景。`build.target` 决定状态资料被编译到 Skill 还是传统状态世界书，两种构建生成不同的角色卡，不将一份产物同时兼容两种运行时。
 
 套件作者可在 `dimensions[].update_rules` 与 `state_system.custom_rules` 中定义自己的数值规则。
 
-Agent 构建遵循“扩展而非替代”：Profile 使用 `agentSystemPrompt: null` 继承 TauriTavern 按工具动态生成的默认运行协议；`skills.visible: ["*"]` 保留用户本地 Skills。Agent 角色卡只追加“每轮必读 `state-system`”的简短桥接指令，状态细节仍在 Skill 中。工具权限则按当前官方格式显式列出全部非委派内置工具，仅排除子 Agent，并保留可选骰子。
+Agent 构建遵循“扩展而非替代”：Profile 使用 `agentSystemPrompt: null` 继承 TauriTavern 按工具动态生成的默认运行协议；`skills.visible: ["*"]` 保留用户本地 Skills。角色卡只加入状态与可选交互工作流的桥接说明，具体规则仍由 Skills、角色卡和世界书共同提供。
 
-可选的暂停式交互层提供安全区悬浮入口和全屏游戏式地图/行动界面，普通文字输入仍然保留。模板只提供通用运行时和最低数据协议，不预设题材、资源体系或胜负规则；套件作者通过 `interaction/`、世界书和 Skills 定义自己的玩法。
+可选的暂停式交互层提供地图、行动、剧情正文和只读状态简报。普通布局使用全屏舞台；SillyTavern 视觉小说模式下自动停靠到上方舞台并保留下方聊天区。普通文字输入始终可用。模板只提供最低互操作协议，不预设题材、资源体系或胜负规则。
+
+## 从模板创建项目
+
+在 GitHub 仓库页面选择 **Use this template → Create a new repository**，然后克隆新仓库。也可以直接复制本仓库并删除原有 Git 历史。
 
 ## 快速开始
 
 ```bash
 pip install -r requirements.txt
 ```
+
+生成器使用 Python 3.11 测试；运行时资源全部为 JSON、SVG、JavaScript 和 CSS。Python 侧仅使用 `PyYAML` 读取 `AGENTS.md` 配置块和场景 Markdown frontmatter。
 
 1. 编辑 `AGENTS.md` 第 2 节配置区，设置 `build.target: "agent"` 或 `"non_agent"`，并填入作品与状态配置；Agent 目标可用 `interaction.enabled` 开关点击交互
 2. 将文学与扮演指南写入角色卡；将角色、设定和背景维护在传统世界书
@@ -47,7 +53,7 @@ interaction/
 └── map.svg         # 可选地图，使用 data-region-id 标记点击区域
 ```
 
-运行时使用官方 `api.agent.startRunFromLegacyGenerate()` 启动后台回合，并通过 `generateOptions.quiet_prompt` 把私有 `<tt_interaction_input>` 仅注入本次 prompt snapshot：不生成可见协议楼层，不需要再点聊天发送按钮，也不展示 Agent 中间叙述。扩展通过 `api.agent.subscribe()` 自行显示阶段、耗时、取消和错误，并确认 Agent 已用 `workspace.commit` 发布剧情；完成后读取 `persist/interaction-state.json`。交互资源和持久投影均为 JSON，扩展只使用浏览器原生 `JSON.parse()`，不依赖宿主或第三方解析器。
+点击行动后，扩展通过官方 Agent Host API 直接启动回合，不会在聊天中留下可见的控制协议，也不需要再点发送按钮。Agent 成功提交后，界面从 `output/main.md`、`persist/character_states.json` 和 `persist/interaction-state.json` 刷新剧情、角色数值和交互状态。交互资源与持久状态均使用 JSON，前端不依赖外部 YAML 解析器。
 
 ## 示例与测试
 
@@ -58,14 +64,14 @@ python scripts/generate.py examples/hongloumeng
 python -m unittest discover -s tests -v
 ```
 
-测试会确认 SVG 区域、`regions.json`、角色阶段资料和世界书互相对应，并在临时目录中执行真实 `AgentGenerator`。
+测试会构建默认模板和《红楼梦》示例，校验 SVG 区域、角色阶段资料、世界书与生成产物的一致性，并防止通用运行时意外引入示例专有内容。
 
 ## 构建目标
 
 | 目标 | 状态资料 | 更新方式 |
 |------|---------|---------|
-| `agent` | `_stages` 进入 `state-system.ttskill` | LLM 验证增量后写入 `persist/character_states.json` |
-| `non_agent` | `_stages` 进入 `{project.id}.state-worldbook.json` | 角色卡输出 `_.set(...)`，由兼容状态脚本保存 |
+| `agent` | `_stages.json` 进入 `state-system.ttskill` | LLM 验证增量后写入 `persist/character_states.json` |
+| `non_agent` | `_stages.json` 进入 `{project.id}.state-worldbook.json` | 角色卡输出 `_.set(...)`，由兼容状态脚本保存 |
 
 未安装非 Agent 状态脚本时，角色卡和世界书仍能正常使用，但数值不会自动持久化。若不需要兼容输出，可将 `state_system.non_agent.emit_legacy_updates` 设为 `false`。
 
@@ -80,6 +86,7 @@ Agent `persist/` 与 legacy 状态脚本是两个独立存储。共用源数据�
 ```
 ├── AGENTS.md         # 配置中心与完整文档
 ├── literature/       # 状态阶段资料、场景剧本、角色卡风格参考
+├── lorebooks/        # 可选的传统世界书
 ├── skills/           # 状态与可选交互协议 Skills
 ├── interaction/      # 作者维护的声明式地图、区域和行动
 ├── extensions/       # 通用交互 UI 运行时
@@ -96,7 +103,7 @@ Agent `persist/` 与 legacy 状态脚本是两个独立存储。共用源数据�
 
 完整的配置说明、工作流步骤和文件格式规范，请参阅 [AGENTS.md](AGENTS.md)。
 
-Agent 交互采用有界快速事务：同阶段并行读取/写入，不重复遍历资料；普通移动不加载全部角色阶段，数值证据不足时保持状态不变并优先提交正文。运行仍要求所选 LLM API 稳定支持原生工具调用；`Upstream request failed` 属于提供商连接错误，应更换 API 后重试。
+Agent 目标需要所选 LLM API 稳定支持原生工具调用。状态只根据当前回合的明确证据更新；数值证据不足时保持不变。
 
 交互界面会在 SillyTavern 视觉小说模式下自动停靠到上方舞台，保留下方聊天区。成功提交的 `output/main.md` 可直接在舞台中阅读；角色数值按维度显示为只读进度条，其它作者简报变量显示为文字或进度条。所有展示均来自成功 Agent run 与聊天级缓存，不创建第二套权威状态。
 

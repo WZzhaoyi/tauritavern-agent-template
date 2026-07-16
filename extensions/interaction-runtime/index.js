@@ -662,8 +662,6 @@ async function startRun(writeAction) {
     runtime.runStore = await chatStore();
     const run = await agent.startRunFromLegacyGenerate({
       generationType: 'normal',
-      // 行动只进入本次 prompt snapshot，不向聊天时间线写入协议消息。
-      // 失败重试仍使用 runtime.lastActionRecord，不会丢失玩家选择。
       generateOptions: {
         quiet_prompt: runtime.lastActionRecord,
         quietToLoud: true
@@ -846,9 +844,7 @@ async function loadCachedState() {
       runtime.narrative = cached.narrative.text;
       runtime.narrativeRunId = cached.narrative.runId ?? null;
     }
-  } catch {
-    // Cache access is an optional enhancement and must not block the panel.
-  }
+  } catch {}
 }
 
 async function hydrateFromLatestRun() {
