@@ -2,6 +2,9 @@
 output/*.json
 output/*.ttskill
 output/*.css
+output/skills/
+output/agent/
+output/non-agent/
 !output/.gitkeep
 
 # Python

@@ -64,7 +64,8 @@ def resolve_characters_dir(project_root: Path, agents_file: Path, cli_value: Opt
         p = Path(cli_value)
         return p if p.is_absolute() else project_root / p
     try:
-        cfg = yaml.safe_load(agents_file.read_text(encoding="utf-8")) or {}
+        text, start, end = load_config_yaml_block(agents_file)
+        cfg = yaml.safe_load(text[start:end]) or {}
     except Exception:
         return project_root / "literature/characters"
     configured = cfg.get("paths", {}).get("characters_dir", "literature/characters")
@@ -124,12 +125,15 @@ def convert(src: Path, src_fmt: str, target_fmt: str, keep_source: bool, overwri
 def update_config(agents_file: Path, target_fmt: str, dry_run: bool) -> bool:
     text, start, end = load_config_yaml_block(agents_file)
     yaml_text = text[start:end]
-    pattern = re.compile(r'^(\s*stages_format:\s*)(["\']?)(json|yaml)((?2))(\s*(?:#.*)?)$', re.MULTILINE)
+    pattern = re.compile(
+        r'^(\s*stages_format:\s*)(["\']?)(json|yaml)\2(\s*(?:#.*)?)$',
+        re.MULTILINE,
+    )
     m = pattern.search(yaml_text)
     if not m:
         raise ConversionError("Cannot find stages_format in AGENTS.md config")
-    new_line = f"{m.group(1)}{m.group(2)}{target_fmt}{m.group(2)}{m.group(5)}"
-    updated = pattern.sub(new_line, yaml_text, count=1) if m.group(3) != target_fmt and m.group(4) == m.group(2) else yaml_text
+    new_line = f"{m.group(1)}{m.group(2)}{target_fmt}{m.group(2)}{m.group(4)}"
+    updated = pattern.sub(new_line, yaml_text, count=1) if m.group(3) != target_fmt else yaml_text
     if updated == yaml_text:
         return False
     if not dry_run:
