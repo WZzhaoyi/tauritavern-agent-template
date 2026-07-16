@@ -97,6 +97,15 @@ class HongloumengExampleTest(unittest.TestCase):
                 '"projectName": "红楼梦·大观园"',
                 (extension / "package-config.js").read_text(encoding="utf-8"),
             )
+            extension_config = (extension / "package-config.js").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('"stateSkillName": "state-system"', extension_config)
+            self.assertIn(
+                '"characterStateFile": "persist/character_states.json"',
+                extension_config,
+            )
+            self.assertIn('"narrativeFile": "output/main.md"', extension_config)
             extension_code = (extension / "index.js").read_text(encoding="utf-8")
             self.assertIn("JSON.parse", extension_code)
             self.assertNotIn("libs?.yaml", extension_code)
@@ -108,9 +117,16 @@ class HongloumengExampleTest(unittest.TestCase):
             self.assertIn("runtime.runCommitted", extension_code)
             self.assertIn("请更换 API", extension_code)
             self.assertIn("model\\.tool_call_required", extension_code)
+            self.assertIn("readWorkspaceFile", extension_code)
+            self.assertIn("agent.listRuns", extension_code)
+            self.assertIn("renderNarrative", extension_code)
+            self.assertIn("renderBriefing", extension_code)
+            self.assertIn("waifuMode", extension_code)
             extension_css = (extension / "style.css").read_text(encoding="utf-8")
             self.assertIn("grid-template-columns: minmax(0, 1fr)", extension_css)
             self.assertIn("data-open", extension_css)
+            self.assertIn("data-vn-mode", extension_css)
+            self.assertIn("tt-interaction-progress", extension_css)
             self.assertLess(
                 extension_code.index("store.listKeys"),
                 extension_code.index("store.getJson"),
@@ -124,6 +140,7 @@ class HongloumengExampleTest(unittest.TestCase):
                 self.assertIn("<tt_interaction_input", interaction_skill)
                 self.assertIn("有界快速路径", interaction_skill)
                 self.assertIn("不得重复列目录", interaction_skill)
+                self.assertIn("extensions.briefing", interaction_skill)
                 self.assertIn("workspace.commit", interaction_skill)
                 self.assertEqual(
                     (EXAMPLE_ROOT / "interaction" / "map.svg").read_bytes(),

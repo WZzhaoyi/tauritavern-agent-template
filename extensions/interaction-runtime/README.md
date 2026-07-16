@@ -12,7 +12,9 @@ TauriTavern 当前没有把第三方 UI Extension 嵌入角色卡或 `.ttskill` 
 
 安装后，只有带有当前 `projectId` 标记的角色卡会显示“行动”按钮。
 
-安装后的悬浮入口会打开全屏地图/行动界面。点击行动后，扩展通过 Agent Host API 的隐式 `quiet_prompt` 传入私有 `<tt_interaction_input>`，并直接启动后台回合。控制协议不会出现在聊天正文或 Agent 中间过程，也不需要再点聊天的发送按钮。扩展会显示运行阶段和耗时，并检查 Agent 是否真正发布了剧情。
+安装后的悬浮入口会打开地图/行动界面：普通布局使用全屏舞台；SillyTavern 视觉小说模式开启时自动停靠到上方约 60% 舞台，保留下方原生聊天区。点击行动后，扩展通过 Agent Host API 的隐式 `quiet_prompt` 传入私有 `<tt_interaction_input>`，并直接启动后台回合。控制协议不会出现在聊天正文或 Agent 中间过程，也不需要再点聊天的发送按钮。扩展会显示运行阶段和耗时，并检查 Agent 是否真正发布了剧情。
+
+Agent commit 后，扩展通过只读 Host API 显示 `output/main.md`，正文仍同时进入聊天历史。角色数值从 `persist/character_states.json` 按维度显示为只读进度条；`persist/interaction-state.json` 中其它 `extensions.briefing` 数值显示为进度条，文字、布尔和数组显示为文本。展示缓存只用于恢复界面，不替代 Agent workspace 中的权威文件。
 
 如果仍看到可见的 `[交互行动]`，表示它来自旧聊天历史或旧版扩展。请替换整个扩展目录、重新导入 `interaction-system.ttskill`，并完全重启 TauriTavern。新 Skill 会将历史中的旧协议视为已发生行动，不在本轮重放。
 

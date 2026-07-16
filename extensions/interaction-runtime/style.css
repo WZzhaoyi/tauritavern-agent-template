@@ -13,6 +13,10 @@
   display: block;
 }
 
+.tt-interaction-root [hidden] {
+  display: none !important;
+}
+
 .tt-interaction-launcher {
   position: fixed;
   z-index: 2998;
@@ -200,6 +204,41 @@
   line-height: 1.55;
 }
 
+.tt-interaction-stage-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tt-interaction-stage-tabs button {
+  min-width: 88px;
+  padding-block: 7px;
+}
+
+.tt-interaction-narrative {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: clamp(16px, 3vw, 34px);
+  border: 1px solid var(--tti-border);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tti-card) 78%, transparent), transparent),
+    rgb(0 0 0 / 0.14);
+  font-size: clamp(0.98rem, 1.4vw, 1.14rem);
+  line-height: 1.85;
+  scrollbar-gutter: stable;
+}
+
+.tt-interaction-narrative p {
+  max-width: 74ch;
+  margin: 0 auto 1em;
+  white-space: pre-wrap;
+}
+
+.tt-interaction-narrative p:last-child {
+  margin-bottom: 0;
+}
+
 .tt-interaction-map {
   display: grid;
   min-height: 240px;
@@ -247,6 +286,82 @@
   align-items: stretch;
 }
 
+.tt-interaction-briefing,
+.tt-interaction-variable-group {
+  display: grid;
+  gap: 10px;
+}
+
+.tt-interaction-variable-group + .tt-interaction-variable-group {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tti-border);
+}
+
+.tt-interaction-variable-group h4 {
+  margin: 0;
+  color: var(--tti-text);
+  font-size: 0.9rem;
+}
+
+.tt-interaction-variable {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tti-card) 82%, transparent);
+}
+
+.tt-interaction-variable-heading,
+.tt-interaction-variable-text {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.tt-interaction-variable-heading {
+  display: grid;
+}
+
+.tt-interaction-variable-heading span,
+.tt-interaction-variable-text span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tti-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tt-interaction-variable-heading strong,
+.tt-interaction-variable-text strong {
+  font-size: 0.86rem;
+  text-align: right;
+}
+
+.tt-interaction-progress {
+  width: 100%;
+  height: 9px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tti-bg) 76%, #000 24%);
+}
+
+.tt-interaction-progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tti-bg) 76%, #000 24%);
+}
+
+.tt-interaction-progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tti-accent) 68%, #fff 32%), var(--tti-accent));
+}
+
+.tt-interaction-progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--tti-accent);
+}
+
 .tt-interaction-target {
   flex: 1 1 120px;
 }
@@ -276,6 +391,51 @@
 @keyframes tti-pulse {
   0%, 100% { opacity: 0.35; transform: scale(0.85); }
   50% { opacity: 1; transform: scale(1.08); }
+}
+
+@media (min-width: 801px) {
+  .tt-interaction-root[data-vn-mode] .tt-interaction-launcher {
+    bottom: calc(40dvh + 16px);
+  }
+
+  .tt-interaction-root[data-vn-mode][data-open] .tt-interaction-backdrop {
+    display: none;
+  }
+
+  .tt-interaction-root[data-vn-mode][data-open] .tt-interaction-panel {
+    inset: 0 0 40dvh;
+    gap: 8px;
+    padding: 10px 14px 12px;
+    border-bottom: 1px solid var(--tti-border);
+    box-shadow: 0 14px 44px rgb(0 0 0 / 0.36);
+  }
+
+  .tt-interaction-root[data-vn-mode] .tt-interaction-header {
+    min-height: 38px;
+  }
+
+  .tt-interaction-root[data-vn-mode] .tt-interaction-kicker {
+    display: none;
+  }
+
+  .tt-interaction-root[data-vn-mode] .tt-interaction-title {
+    font-size: 1.05rem;
+  }
+
+  .tt-interaction-root[data-vn-mode] .tt-interaction-status {
+    min-height: 34px;
+    padding-block: 7px;
+  }
+
+  .tt-interaction-root[data-vn-mode] .tt-interaction-game-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    gap: 10px;
+  }
+
+  .tt-interaction-root[data-vn-mode] .tt-interaction-stage,
+  .tt-interaction-root[data-vn-mode] .tt-interaction-command-deck {
+    border-radius: 12px;
+  }
 }
 
 @media (max-width: 800px) {

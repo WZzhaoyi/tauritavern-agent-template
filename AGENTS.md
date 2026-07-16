@@ -250,7 +250,7 @@ theme:
 
 Profile 的工具清单按 TauriTavern 当前规范使用精确工具名：默认授予当前全部非委派内置工具，只有意排除子 Agent 委派工具；`dice.roll` 由 `agent.enable_dice` 单独开关。这是执行边界，不是对用户 Skills 的白名单。官方增加新工具后，生成器也需同步加入其精确名称。
 
-**暂停式交互**：`interaction.enabled: true` 时，生成器额外打包 `interaction-system` 并输出一个通用 UI Extension。扩展使用安全区悬浮入口和全屏地图/行动界面；玩家点击后，它通过官方 `api.agent.startRunFromLegacyGenerate()` 的 `generateOptions.quiet_prompt` 把私有 `<tt_interaction_input>` 仅传入本次 prompt snapshot，不写入聊天时间线，也不需要玩家再点发送。回合以后台 presentation 隐藏 Agent 中间过程，扩展用 `api.agent.subscribe()` 显示真实阶段与耗时；Agent 仍必须用 `workspace.commit` 发布剧情，完成后扩展读取 `persist/interaction-state.json` 刷新界面。
+**暂停式交互**：`interaction.enabled: true` 时，生成器额外打包 `interaction-system` 并输出一个通用 UI Extension。扩展使用安全区悬浮入口；普通模式打开全屏地图/行动界面，SillyTavern 视觉小说模式下自动停靠到上方约 60% 舞台并保留下方聊天区。玩家点击后，它通过官方 `api.agent.startRunFromLegacyGenerate()` 的 `generateOptions.quiet_prompt` 把私有 `<tt_interaction_input>` 仅传入本次 prompt snapshot，不写入聊天时间线，也不需要玩家再点发送。回合以后台 presentation 隐藏 Agent 中间过程，扩展用 `api.agent.subscribe()` 显示真实阶段与耗时；Agent 仍必须用 `workspace.commit` 发布剧情，完成后扩展读取 `output/main.md`、`persist/character_states.json` 与 `persist/interaction-state.json` 刷新正文、只读数值进度条和其它文字简报。
 
 交互层只规定最低互操作协议，不规定题材和玩法：
 
@@ -283,6 +283,7 @@ Profile 的工具清单按 TauriTavern 当前规范使用精确工具名：默�
 - `actions.json`、`regions.json` 和 `map.svg` 会进入 `interaction-system.ttskill` 的 `assets/`。
 - 交互扩展通过 Host `api.skill.readFile()` 读取这些 UTF-8 资源；地图优先使用 SVG，避免二进制资源读取依赖。
 - `persist/interaction-state.json` 是 Agent 权威的 UI 投影；扩展的聊天级缓存只用于快速恢复界面，不替代它。
+- 角色数值直接来自 `persist/character_states.json` 并结合维度定义显示为进度条，不复制到交互投影；其它作者简报放在 `extensions.briefing`，数值显示进度条，非数值显示文字。
 - `persist/character_states.json` 和 `persist/interaction-state.json` 在首轮前默认不存在。Agent 应先列出 workspace，再创建缺失文件；首轮 `Not found` 不是应向用户报错的状态。
 - 不要把具体剧情判断写入通用扩展 JavaScript；应放入角色卡、世界书、状态规则或作者自己的 Skills。
 

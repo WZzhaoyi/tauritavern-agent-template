@@ -55,6 +55,19 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 - `extensions` 是套件作者的扩展空间。可以加入地图状态、资源、旗标、任务或自定义面板数据。
 - 对未知字段应尽量原样保留，避免阻止其他 Skill 或未来版本扩展。
 
+界面会直接从权威 `persist/character_states.json` 读取角色数值，并结合 `state-system` 的维度定义显示只读进度条，不要把同一角色数值重复复制到交互投影。其它需要展示的简报可写入 `extensions.briefing`：数值自动显示为进度条，文字、布尔和数组显示为文本。本模板当前不允许界面直接编辑这些值。
+
+```json
+{
+  "extensions": {
+    "briefing": [
+      {"id": "garden_reputation", "label": "园中声望", "value": 42, "min": 0, "max": 100},
+      {"id": "weather", "label": "天气", "value": "微雨"}
+    ]
+  }
+}
+```
+
 推荐的目标与行动项：
 
 ```json
@@ -81,7 +94,7 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 2. 读取玩家本轮普通输入或本次运行最后一个 `<tt_interaction_input>`，核对行动 ID 与当前目标；动态 `actions` 中的行动同样有效。
 3. 按角色卡、已激活世界书、状态规则和其它可见 Skills 生成叙事。
 4. 完成 `state-system` 要求的角色状态事务。
-5. 把已经发生的结果投影到交互状态：递增 `turn`，更新简短 `summary`、当前位置、目标和下一轮可用行动。与角色状态和 `output/main.md` 在同一模型回合并行写入。
+5. 把已经发生的结果投影到交互状态：递增 `turn`，更新简短 `summary`、当前位置、目标、下一轮可用行动和作者定义的可选 `extensions.briefing`。与角色状态和 `output/main.md` 在同一模型回合并行写入。
 6. 写入前在内存中核对 JSON；只有写入报错或无法确认合并结果时才回读，禁止无条件回读刚写入的文件。
 7. 下一模型回合立即调用 `workspace.commit` 发布 `output/main.md`，再调用 `workspace.finish`。交互扩展使用后台 presentation 隐藏 Agent 中间过程，但“后台可以无 commit 结束”不适用于本交互回合；每轮仍必须发布剧情正文。
 

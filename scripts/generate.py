@@ -795,7 +795,10 @@ class AgentGenerator:
             "projectName": self.pname,
             "profileId": self.project_id,
             "skillName": self.interaction_cfg["skill_id"],
+            "stateSkillName": "state-system",
             "stateFile": self.interaction_cfg["state_file"],
+            "characterStateFile": self.state_cfg["persist_file"],
+            "narrativeFile": "output/main.md",
             "cacheNamespace": extension_id,
         }
         config_text = (

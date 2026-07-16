@@ -1,6 +1,7 @@
 import config from './package-config.js';
 
 const ROOT_ID = `tt-interaction-${config.projectId}`;
+const CACHE_KEYS = ['interaction-state', 'character-state', 'narrative'];
 const TERMINAL_EVENTS = new Set(['run_completed', 'run_failed', 'run_cancelled', 'run_partial_success']);
 const PROGRESS_LABELS = {
   run_created: '准备回合',
@@ -28,6 +29,11 @@ const runtime = {
   baseActions: [],
   regions: [],
   state: null,
+  characterState: null,
+  dimensions: [],
+  narrative: '',
+  narrativeRunId: null,
+  stageView: 'map',
   lastActionRecord: null,
   pendingActionLabel: null,
   runChatToken: null,
@@ -96,13 +102,44 @@ function getUi() {
     panel: root?.querySelector('[data-role="panel"]'),
     status: root?.querySelector('[data-role="status"]'),
     summary: root?.querySelector('[data-role="summary"]'),
+    narrative: root?.querySelector('[data-role="narrative"]'),
     map: root?.querySelector('[data-role="map"]'),
+    stageTabs: root?.querySelectorAll('[data-stage-view]') ?? [],
+    briefing: root?.querySelector('[data-role="briefing"]'),
     targets: root?.querySelector('[data-role="targets"]'),
     actions: root?.querySelector('[data-role="actions"]'),
     lore: root?.querySelector('[data-role="lore"]'),
     cancel: root?.querySelector('[data-role="cancel"]'),
     retry: root?.querySelector('[data-role="retry"]')
   };
+}
+
+function isVisualNovelStage() {
+  return document.body.classList.contains('waifuMode')
+    && window.matchMedia('(min-width: 801px)').matches;
+}
+
+function syncPresentationMode() {
+  const { root, panel } = getUi();
+  const visualNovel = isVisualNovelStage();
+  root?.toggleAttribute('data-vn-mode', visualNovel);
+  if (panel) {
+    panel.dataset.ttMobileSurface = visualNovel ? 'free-window' : 'fullscreen-window';
+    panel.setAttribute('aria-modal', String(!visualNovel));
+  }
+}
+
+function setStageView(view) {
+  runtime.stageView = view === 'narrative' ? 'narrative' : 'map';
+  const { root, narrative, map, stageTabs } = getUi();
+  if (root) root.dataset.stageView = runtime.stageView;
+  if (narrative) narrative.hidden = runtime.stageView !== 'narrative';
+  if (map) map.hidden = runtime.stageView !== 'map' || !map.childElementCount;
+  stageTabs.forEach(button => {
+    const selected = button.dataset.stageView === runtime.stageView;
+    button.toggleAttribute('data-selected', selected);
+    button.setAttribute('aria-selected', String(selected));
+  });
 }
 
 function setStatus(message, tone = 'idle') {
@@ -198,8 +235,28 @@ function createUi() {
   status.setAttribute('aria-live', 'polite');
   const summary = element('div', 'tt-interaction-summary');
   summary.dataset.role = 'summary';
+  const stageTabs = element('div', 'tt-interaction-stage-tabs');
+  stageTabs.setAttribute('role', 'tablist');
+  const narrativeTab = element('button', '', '剧情');
+  narrativeTab.type = 'button';
+  narrativeTab.dataset.stageView = 'narrative';
+  narrativeTab.setAttribute('role', 'tab');
+  const mapTab = element('button', '', '地图');
+  mapTab.type = 'button';
+  mapTab.dataset.stageView = 'map';
+  mapTab.setAttribute('role', 'tab');
+  stageTabs.append(narrativeTab, mapTab);
+  const narrative = element('article', 'tt-interaction-narrative');
+  narrative.dataset.role = 'narrative';
+  narrative.setAttribute('aria-live', 'polite');
   const map = element('div', 'tt-interaction-map');
   map.dataset.role = 'map';
+
+  const briefingSection = element('section', 'tt-interaction-section tt-interaction-briefing-section');
+  briefingSection.append(element('h3', '', '状态简报'));
+  const briefing = element('div', 'tt-interaction-briefing');
+  briefing.dataset.role = 'briefing';
+  briefingSection.append(briefing);
 
   const targetSection = element('section', 'tt-interaction-section tt-interaction-target-section');
   targetSection.append(element('h3', '', '目标'));
@@ -220,9 +277,9 @@ function createUi() {
   loreSection.append(lore);
 
   const stage = element('main', 'tt-interaction-stage');
-  stage.append(summary, map);
+  stage.append(summary, stageTabs, narrative, map);
   const commandDeck = element('aside', 'tt-interaction-command-deck');
-  commandDeck.append(targetSection, actionSection, loreSection);
+  commandDeck.append(briefingSection, targetSection, actionSection, loreSection);
   const gameLayout = element('div', 'tt-interaction-game-layout');
   gameLayout.append(stage, commandDeck);
 
@@ -235,8 +292,14 @@ function createUi() {
   close.addEventListener('click', () => togglePanel(false));
   cancel.addEventListener('click', cancelRun);
   retry.addEventListener('click', () => startRun(false));
+  narrativeTab.addEventListener('click', () => setStageView('narrative'));
+  mapTab.addEventListener('click', () => setStageView('map'));
 
   refreshVisibility();
+  syncPresentationMode();
+  renderNarrative();
+  renderBriefing();
+  setStageView(runtime.stageView);
 }
 
 async function togglePanel(force) {
@@ -259,13 +322,13 @@ function refreshVisibility() {
   }
 }
 
-async function readSkillText(path, optional = false) {
+async function readSkillText(path, optional = false, skillName = config.skillName) {
   const skillApi = ttApi()?.skill;
   if (!skillApi?.readFile) {
     throw new Error('当前 TauriTavern 未提供 Skill Host API');
   }
   try {
-    const file = await skillApi.readFile({ name: config.skillName, path, maxChars: 80000 });
+    const file = await skillApi.readFile({ name: skillName, path, maxChars: 80000 });
     return file.content;
   } catch (error) {
     if (optional) return null;
@@ -276,16 +339,24 @@ async function readSkillText(path, optional = false) {
 async function loadInterface() {
   setStatus('载入交互资源…', 'busy');
   try {
-    const [actionsText, regionsText, mapText] = await Promise.all([
+    const [actionsText, regionsText, mapText, dimensionsText] = await Promise.all([
       readSkillText('assets/actions.json'),
       readSkillText('assets/regions.json'),
-      readSkillText('assets/map.svg', true)
+      readSkillText('assets/map.svg', true),
+      readSkillText('references/dimensions.json', true, config.stateSkillName)
     ]);
     runtime.baseActions = parseJson(actionsText, 'assets/actions.json').actions ?? [];
     runtime.regions = parseJson(regionsText, 'assets/regions.json').regions ?? [];
+    runtime.dimensions = dimensionsText
+      ? parseJson(dimensionsText, 'references/dimensions.json').dimensions ?? []
+      : [];
     renderMap(mapText);
     await loadCachedState();
+    await hydrateFromLatestRun();
     renderState();
+    renderNarrative();
+    renderBriefing();
+    setStageView(runtime.narrative ? 'narrative' : 'map');
     await renderLore();
     setStatus('请选择目标与行动', 'ready');
   } catch (error) {
@@ -313,7 +384,7 @@ function renderMap(svgText) {
     ADD_ATTR: ['data-region-id', 'tabindex', 'role', 'aria-label']
   });
   map.innerHTML = safeSvg;
-  map.hidden = false;
+  map.hidden = runtime.stageView !== 'map';
   map.querySelectorAll('[data-region-id]').forEach(node => {
     const select = () => {
       const id = node.getAttribute('data-region-id');
@@ -328,6 +399,132 @@ function renderMap(svgText) {
       }
     });
   });
+}
+
+function renderNarrative() {
+  const { narrative } = getUi();
+  if (!narrative) return;
+  narrative.replaceChildren();
+  const text = runtime.narrative?.trim();
+  if (!text) {
+    narrative.append(element('p', 'tt-interaction-empty', '完成一次行动后，本回合正文会显示在这里。'));
+    return;
+  }
+  for (const paragraph of text.split(/\n\s*\n/).map(value => value.trim()).filter(Boolean)) {
+    narrative.append(element('p', '', paragraph));
+  }
+}
+
+function dimensionFor(id) {
+  return runtime.dimensions.find(dimension => dimension?.id === id) ?? null;
+}
+
+function appendProgress(container, label, value, min, max, description = '') {
+  const safeMin = Number.isFinite(min) ? min : 0;
+  const safeMax = Number.isFinite(max) && max > safeMin ? max : Math.max(100, value, safeMin + 1);
+  const safeValue = Math.min(safeMax, Math.max(safeMin, value));
+  const item = element('div', 'tt-interaction-variable tt-interaction-variable-number');
+  if (description) item.title = description;
+  const heading = element('div', 'tt-interaction-variable-heading');
+  heading.append(
+    element('span', '', label),
+    element('strong', '', `${value} / ${safeMax}`)
+  );
+  const progress = element('progress', 'tt-interaction-progress');
+  progress.min = safeMin;
+  progress.max = safeMax;
+  progress.value = safeValue;
+  progress.setAttribute('aria-label', label);
+  item.append(heading, progress);
+  container.append(item);
+}
+
+function displayTextValue(value) {
+  if (typeof value === 'boolean') return value ? '是' : '否';
+  if (Array.isArray(value)) return value.join('、');
+  if (value && typeof value === 'object') return JSON.stringify(value);
+  return String(value ?? '—');
+}
+
+function appendTextVariable(container, label, value, description = '') {
+  const item = element('div', 'tt-interaction-variable tt-interaction-variable-text');
+  if (description) item.title = description;
+  item.append(
+    element('span', '', label),
+    element('strong', '', displayTextValue(value))
+  );
+  container.append(item);
+}
+
+function relevantCharacterNames() {
+  const characters = runtime.characterState?.characters ?? {};
+  if (runtime.selectedTarget?.type === 'character' && characters[runtime.selectedTarget.label]) {
+    return [runtime.selectedTarget.label];
+  }
+  const localNames = (runtime.selectedTarget?.characters ?? [])
+    .map(character => character?.label)
+    .filter(name => name && characters[name]);
+  return localNames.length ? localNames : Object.keys(characters);
+}
+
+function renderBriefing() {
+  const { briefing } = getUi();
+  if (!briefing) return;
+  briefing.replaceChildren();
+
+  const characters = runtime.characterState?.characters ?? {};
+  for (const characterName of relevantCharacterNames()) {
+    const values = characters[characterName];
+    if (!values || typeof values !== 'object') continue;
+    const group = element('section', 'tt-interaction-variable-group');
+    group.append(element('h4', '', characterName));
+    for (const [key, value] of Object.entries(values)) {
+      const dimension = dimensionFor(key);
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        const ranges = Array.isArray(dimension?.ranges) ? dimension.ranges : [];
+        appendProgress(
+          group,
+          dimension?.name ?? key,
+          value,
+          ranges[0] ?? 0,
+          ranges.at(-1) ?? 100,
+          dimension?.description ?? ''
+        );
+      } else {
+        appendTextVariable(group, dimension?.name ?? key, value, dimension?.description ?? '');
+      }
+    }
+    if (group.childElementCount > 1) briefing.append(group);
+  }
+
+  const custom = runtime.state?.extensions?.briefing;
+  if (Array.isArray(custom) && custom.length) {
+    const group = element('section', 'tt-interaction-variable-group');
+    group.append(element('h4', '', '局势'));
+    for (const item of custom) {
+      if (!item?.label || item.value === undefined) continue;
+      if (typeof item.value === 'number' && Number.isFinite(item.value)) {
+        appendProgress(group, item.label, item.value, item.min ?? 0, item.max ?? 100, item.description ?? '');
+      } else {
+        appendTextVariable(group, item.label, item.value, item.description ?? '');
+      }
+    }
+    if (group.childElementCount > 1) briefing.append(group);
+  }
+
+  const flags = runtime.characterState?.plot?.flags;
+  if (flags && typeof flags === 'object' && Object.keys(flags).length) {
+    const group = element('section', 'tt-interaction-variable-group');
+    group.append(element('h4', '', '剧情旗标'));
+    for (const [key, value] of Object.entries(flags)) appendTextVariable(group, key, value);
+    briefing.append(group);
+  }
+
+  const section = briefing.closest('.tt-interaction-section');
+  if (!briefing.childElementCount) {
+    briefing.append(element('span', 'tt-interaction-empty', '完成首个成功回合后显示状态。'));
+  }
+  if (section) section.hidden = false;
 }
 
 function currentTargets() {
@@ -400,6 +597,7 @@ function renderState() {
   map?.querySelectorAll('[data-region-id]').forEach(node => {
     node.toggleAttribute('data-selected', runtime.selectedTarget?.id === node.getAttribute('data-region-id'));
   });
+  renderBriefing();
 }
 
 function selectTarget(target) {
@@ -491,7 +689,14 @@ async function startRun(writeAction) {
 
 async function handleRunEvent(event) {
   if (event?.runId && event.runId !== runtime.runId) return;
-  if (event.type === 'chat_commit_completed') runtime.runCommitted = true;
+  if (event.type === 'chat_commit_completed') {
+    runtime.runCommitted = true;
+    await refreshNarrativeFromRun(
+      runtime.runId,
+      runtime.runChatToken === currentChatToken(),
+      runtime.runStore
+    );
+  }
   const label = PROGRESS_LABELS[event.type];
   if (label && runtime.runChatToken === currentChatToken()) {
     setStatus(label, event.type === 'run_failed' ? 'error' : 'busy');
@@ -505,7 +710,13 @@ async function handleRunEvent(event) {
   const sameChat = runtime.runChatToken === currentChatToken();
 
   if (event.type === 'run_completed') {
-    await refreshStateFromRun(runtime.runId, sameChat, runtime.runStore);
+    await Promise.all([
+      refreshStateFromRun(runtime.runId, sameChat, runtime.runStore),
+      refreshCharacterStateFromRun(runtime.runId, sameChat, runtime.runStore),
+      runtime.narrativeRunId === runtime.runId
+        ? Promise.resolve()
+        : refreshNarrativeFromRun(runtime.runId, sameChat, runtime.runStore)
+    ]);
     if (!runtime.runCommitted) {
       if (retry) retry.hidden = false;
       if (sameChat) {
@@ -518,9 +729,16 @@ async function handleRunEvent(event) {
     }
     if (sameChat && runtime.runCommitted) {
       await renderLore();
-      setStatus('回合完成；返回聊天阅读剧情，或继续选择行动', 'ready');
+      setStatus('回合完成；可阅读剧情、查看地图或继续行动', 'ready');
     }
   } else if (event.type === 'run_partial_success') {
+    await Promise.all([
+      refreshStateFromRun(runtime.runId, sameChat, runtime.runStore),
+      refreshCharacterStateFromRun(runtime.runId, sameChat, runtime.runStore),
+      runtime.narrativeRunId === runtime.runId
+        ? Promise.resolve()
+        : refreshNarrativeFromRun(runtime.runId, sameChat, runtime.runStore)
+    ]);
     runtime.lastActionRecord = null;
     runtime.pendingActionLabel = null;
     if (retry) retry.hidden = true;
@@ -556,7 +774,7 @@ async function refreshStateFromRun(runId, render, cacheStore) {
   try {
     const file = await ttApi().agent.readWorkspaceFile({ runId, path: config.stateFile });
     const state = parseJson(file.text, config.stateFile);
-    await writeCachedState({ runId, sha256: file.sha256, state }, cacheStore);
+    await writeCachedValue('interaction-state', { runId, sha256: file.sha256, state }, cacheStore);
     if (render) {
       runtime.state = state;
       renderState();
@@ -564,6 +782,42 @@ async function refreshStateFromRun(runId, render, cacheStore) {
   } catch (error) {
     console.warn('[TauriTavern Interaction] state refresh skipped', error);
     if (render) renderState();
+  }
+}
+
+async function refreshCharacterStateFromRun(runId, render, cacheStore) {
+  if (!runId || !config.characterStateFile) return;
+  try {
+    const file = await ttApi().agent.readWorkspaceFile({ runId, path: config.characterStateFile });
+    const state = parseJson(file.text, config.characterStateFile);
+    await writeCachedValue('character-state', { runId, sha256: file.sha256, state }, cacheStore);
+    if (render) {
+      runtime.characterState = state;
+      renderBriefing();
+    }
+  } catch (error) {
+    console.warn('[TauriTavern Interaction] character state refresh skipped', error);
+    if (render) renderBriefing();
+  }
+}
+
+async function refreshNarrativeFromRun(runId, render, cacheStore) {
+  if (!runId || !config.narrativeFile) return;
+  try {
+    const file = await ttApi().agent.readWorkspaceFile({ runId, path: config.narrativeFile });
+    await writeCachedValue(
+      'narrative',
+      { runId, sha256: file.sha256, text: file.text },
+      cacheStore
+    );
+    if (render) {
+      runtime.narrative = file.text;
+      runtime.narrativeRunId = runId;
+      renderNarrative();
+      setStageView('narrative');
+    }
+  } catch (error) {
+    console.warn('[TauriTavern Interaction] narrative refresh skipped', error);
   }
 }
 
@@ -580,24 +834,61 @@ async function loadCachedState() {
   if (!store?.listKeys || !store?.getJson) return;
   try {
     const keys = await store.listKeys({ namespace: config.cacheNamespace });
-    if (!keys.includes('interaction-state')) return;
-    const cached = await store.getJson({
-      namespace: config.cacheNamespace,
-      key: 'interaction-state'
-    });
-    if (cached?.state) runtime.state = cached.state;
+    const available = CACHE_KEYS.filter(key => keys.includes(key));
+    const entries = await Promise.all(available.map(async key => [
+      key,
+      await store.getJson({ namespace: config.cacheNamespace, key })
+    ]));
+    const cached = Object.fromEntries(entries);
+    if (cached['interaction-state']?.state) runtime.state = cached['interaction-state'].state;
+    if (cached['character-state']?.state) runtime.characterState = cached['character-state'].state;
+    if (typeof cached.narrative?.text === 'string') {
+      runtime.narrative = cached.narrative.text;
+      runtime.narrativeRunId = cached.narrative.runId ?? null;
+    }
   } catch {
     // Cache access is an optional enhancement and must not block the panel.
   }
 }
 
-async function writeCachedState(value, storeOverride = null) {
+async function hydrateFromLatestRun() {
+  if (runtime.narrative && runtime.characterState && runtime.state) return;
+  const agent = ttApi()?.agent;
+  const chat = ttApi()?.chat;
+  if (!agent?.listRuns || !chat?.current?.ref || !chat?.current?.handle) return;
+  try {
+    const chatRef = chat.current.ref();
+    const stableChatId = await chat.current.handle().stableId();
+    const result = await agent.listRuns({
+      chatRef,
+      stableChatId,
+      statuses: ['completed', 'partial_success'],
+      limit: 10
+    });
+    const latest = result?.runs?.find(run => (run.commitCount ?? 0) > 0);
+    if (!latest?.runId) return;
+    const store = await chatStore();
+    await Promise.all([
+      runtime.state ? Promise.resolve() : refreshStateFromRun(latest.runId, true, store),
+      runtime.characterState
+        ? Promise.resolve()
+        : refreshCharacterStateFromRun(latest.runId, true, store),
+      runtime.narrative
+        ? Promise.resolve()
+        : refreshNarrativeFromRun(latest.runId, true, store)
+    ]);
+  } catch (error) {
+    console.warn('[TauriTavern Interaction] latest run hydration skipped', error);
+  }
+}
+
+async function writeCachedValue(key, value, storeOverride = null) {
   const store = storeOverride ?? await chatStore();
   if (!store?.setJson) return;
   try {
     await store.setJson({
       namespace: config.cacheNamespace,
-      key: 'interaction-state',
+      key,
       value
     });
   } catch (error) {
@@ -632,13 +923,27 @@ async function renderLore() {
 async function initialize() {
   await (window.__TAURITAVERN__?.ready ?? window.__TAURITAVERN_MAIN_READY__ ?? Promise.resolve());
   createUi();
+  syncPresentationMode();
+  new MutationObserver(syncPresentationMode).observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class']
+  });
+  window.addEventListener('resize', syncPresentationMode);
   const context = stContext();
   if (context?.eventSource && context?.event_types?.CHAT_CHANGED) {
     context.eventSource.on(context.event_types.CHAT_CHANGED, () => {
       runtime.state = null;
+      runtime.characterState = null;
+      runtime.narrative = '';
+      runtime.narrativeRunId = null;
+      runtime.stageView = 'map';
       runtime.selectedTarget = null;
       if (!runtime.busy) runtime.lastActionRecord = null;
       refreshVisibility();
+      renderNarrative();
+      renderBriefing();
+      setStageView('map');
+      if (runtime.opened && activeCardMatches()) void loadInterface();
     });
   }
 }

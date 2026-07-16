@@ -98,6 +98,8 @@ Agent `persist/` 与 legacy 状态脚本是两个独立存储。共用源数据�
 
 Agent 交互采用有界快速事务：同阶段并行读取/写入，不重复遍历资料；普通移动不加载全部角色阶段，数值证据不足时保持状态不变并优先提交正文。运行仍要求所选 LLM API 稳定支持原生工具调用；`Upstream request failed` 属于提供商连接错误，应更换 API 后重试。
 
+交互界面会在 SillyTavern 视觉小说模式下自动停靠到上方舞台，保留下方聊天区。成功提交的 `output/main.md` 可直接在舞台中阅读；角色数值按维度显示为只读进度条，其它作者简报变量显示为文字或进度条。所有展示均来自成功 Agent run 与聊天级缓存，不创建第二套权威状态。
+
 ## 参考
 
 - [TauriTavern 官网](https://tauritavern.github.io/)
