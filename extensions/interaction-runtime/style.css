@@ -1,8 +1,10 @@
 .tt-interaction-root {
   --tti-accent: var(--SmartThemeQuoteColor, #8db7e8);
   --tti-text: var(--SmartThemeBodyColor, #eef2f7);
-  --tti-border: var(--SmartThemeBorderColor, #667085);
-  --tti-bg: color-mix(in srgb, var(--SmartThemeBlurTintColor, #171b22) 94%, transparent);
+  --tti-muted: color-mix(in srgb, var(--tti-text) 68%, transparent);
+  --tti-border: color-mix(in srgb, var(--SmartThemeBorderColor, #667085) 72%, transparent);
+  --tti-bg: var(--SmartThemeBlurTintColor, #171b22);
+  --tti-card: color-mix(in srgb, var(--tti-bg) 86%, var(--tti-text) 14%);
   display: none;
   color: var(--tti-text);
 }
@@ -14,17 +16,38 @@
 .tt-interaction-launcher {
   position: fixed;
   z-index: 2998;
-  right: max(16px, var(--tt-inset-right, env(safe-area-inset-right)));
+  left: max(16px, var(--tt-inset-left, env(safe-area-inset-left)));
   bottom: max(76px, calc(var(--tt-inset-bottom, env(safe-area-inset-bottom)) + 64px));
-  min-width: 64px;
-  min-height: 44px;
+  min-height: 48px;
+  padding: 0 18px;
   border: 1px solid var(--tti-border);
   border-radius: 999px;
-  background: var(--tti-bg);
+  background: color-mix(in srgb, var(--tti-bg) 88%, transparent);
+  box-shadow: 0 10px 32px rgb(0 0 0 / 0.28);
   color: var(--tti-text);
-  backdrop-filter: blur(var(--SmartThemeBlurStrength, 12px));
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(var(--SmartThemeBlurStrength, 14px));
 }
 
+.tt-interaction-launcher::before {
+  content: '◈';
+  margin-right: 8px;
+  color: var(--tti-accent);
+}
+
+.tt-interaction-launcher[data-busy]::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 9px;
+  border-radius: 50%;
+  background: var(--tti-accent);
+  animation: tti-pulse 1.2s ease-in-out infinite;
+}
+
+.tt-interaction-root[data-open] .tt-interaction-launcher,
 .tt-interaction-backdrop,
 .tt-interaction-panel {
   display: none;
@@ -35,26 +58,34 @@
   position: fixed;
   z-index: 2999;
   inset: 0;
-  background: rgb(0 0 0 / 0.5);
+  background: rgb(0 0 0 / 0.72);
 }
 
 .tt-interaction-root[data-open] .tt-interaction-panel {
   display: flex;
   position: fixed;
   z-index: 3000;
-  top: max(16px, var(--tt-inset-top, env(safe-area-inset-top)));
-  right: max(16px, var(--tt-inset-right, env(safe-area-inset-right)));
-  bottom: max(16px, var(--tt-inset-bottom, env(safe-area-inset-bottom)));
-  width: min(560px, calc(100vw - 32px));
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
   flex-direction: column;
-  gap: 12px;
-  overflow: auto;
-  padding: 16px;
-  border: 1px solid var(--tti-border);
-  border-radius: 16px;
-  background: var(--tti-bg);
-  box-shadow: 0 18px 60px rgb(0 0 0 / 0.42);
-  backdrop-filter: blur(var(--SmartThemeBlurStrength, 16px));
+  gap: 14px;
+  overflow: hidden;
+  padding-top: max(16px, var(--tt-inset-top, env(safe-area-inset-top)));
+  padding-right: max(16px, var(--tt-inset-right, env(safe-area-inset-right)));
+  padding-bottom: max(16px, var(--tt-viewport-bottom-inset, var(--tt-inset-bottom, env(safe-area-inset-bottom))));
+  padding-left: max(16px, var(--tt-inset-left, env(safe-area-inset-left)));
+  background:
+    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--tti-accent) 16%, transparent), transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--tti-bg) 96%, #000 4%), var(--tti-bg));
+  color: var(--tti-text);
+}
+
+.tt-interaction-header,
+.tt-interaction-game-layout,
+.tt-interaction-status {
+  width: min(100%, 1440px);
+  margin-inline: auto;
 }
 
 .tt-interaction-header,
@@ -68,19 +99,33 @@
 }
 
 .tt-interaction-header {
+  min-height: 54px;
   justify-content: space-between;
 }
 
+.tt-interaction-brand {
+  display: grid;
+  gap: 2px;
+}
+
+.tt-interaction-kicker {
+  color: var(--tti-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
 .tt-interaction-title {
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: clamp(1.25rem, 2.4vw, 2rem);
+  font-weight: 760;
 }
 
 .tt-interaction-panel button {
   border: 1px solid var(--tti-border);
-  border-radius: 9px;
-  padding: 8px 11px;
-  background: color-mix(in srgb, var(--tti-bg) 85%, var(--tti-text) 15%);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--tti-card);
   color: var(--tti-text);
   cursor: pointer;
 }
@@ -88,6 +133,7 @@
 .tt-interaction-panel button:hover,
 .tt-interaction-panel button[data-selected] {
   border-color: var(--tti-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tti-accent) 40%, transparent);
 }
 
 .tt-interaction-panel button:disabled {
@@ -95,11 +141,14 @@
   opacity: 0.5;
 }
 
-.tt-interaction-status,
-.tt-interaction-summary {
-  padding: 9px 11px;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--tti-bg) 86%, var(--tti-text) 14%);
+.tt-interaction-status {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 10px 13px;
+  border: 1px solid var(--tti-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tti-bg) 82%, transparent);
+  color: var(--tti-muted);
 }
 
 .tt-interaction-status[data-tone='busy'] {
@@ -107,21 +156,65 @@
 }
 
 .tt-interaction-status[data-tone='error'] {
-  color: #ff9b93;
+  border-color: color-mix(in srgb, #ff7368 60%, transparent);
+  color: #ffaaa4;
+}
+
+.tt-interaction-game-layout {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 16px;
+}
+
+.tt-interaction-stage,
+.tt-interaction-command-deck {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--tti-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--tti-bg) 86%, transparent);
+  box-shadow: 0 20px 64px rgb(0 0 0 / 0.24);
+}
+
+.tt-interaction-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding: 14px;
+}
+
+.tt-interaction-command-deck {
+  overflow: auto;
+  padding: 16px;
+}
+
+.tt-interaction-summary {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--tti-card);
+  color: var(--tti-muted);
+  line-height: 1.55;
 }
 
 .tt-interaction-map {
+  display: grid;
+  min-height: 240px;
+  flex: 1;
+  place-items: center;
   overflow: hidden;
-  min-height: 180px;
   border: 1px solid var(--tti-border);
-  border-radius: 12px;
-  background: rgb(0 0 0 / 0.16);
+  border-radius: 14px;
+  background: rgb(0 0 0 / 0.18);
 }
 
 .tt-interaction-map svg {
   display: block;
   width: 100%;
-  height: auto;
+  max-height: 100%;
 }
 
 .tt-interaction-map [data-region-id] {
@@ -133,50 +226,107 @@
 
 .tt-interaction-map [data-region-id]:hover,
 .tt-interaction-map [data-region-id][data-selected] {
-  filter: brightness(1.2);
-  transform: scale(1.03);
+  filter: brightness(1.22);
+  transform: scale(1.025);
+}
+
+.tt-interaction-section + .tt-interaction-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tti-border);
 }
 
 .tt-interaction-section h3 {
-  margin: 2px 0 8px;
-  font-size: 0.9rem;
+  margin: 0 0 10px;
+  color: var(--tti-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+}
+
+.tt-interaction-targets {
+  align-items: stretch;
+}
+
+.tt-interaction-target {
+  flex: 1 1 120px;
 }
 
 .tt-interaction-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
 }
 
 .tt-interaction-action {
   display: flex;
-  min-height: 64px;
+  min-height: 76px;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  justify-content: center;
+  gap: 5px;
   text-align: left;
 }
 
 .tt-interaction-action span,
 .tt-interaction-empty {
+  color: var(--tti-muted);
   font-size: 0.82rem;
-  opacity: 0.72;
 }
 
-@media (max-width: 700px) {
+@keyframes tti-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@media (max-width: 800px) {
   .tt-interaction-root[data-open] .tt-interaction-panel {
-    inset: 0;
-    width: auto;
-    padding-top: max(14px, var(--tt-inset-top, env(safe-area-inset-top)));
-    padding-right: max(14px, var(--tt-inset-right, env(safe-area-inset-right)));
-    padding-bottom: max(14px, var(--tt-viewport-bottom-inset, var(--tt-inset-bottom, env(safe-area-inset-bottom))));
-    padding-left: max(14px, var(--tt-inset-left, env(safe-area-inset-left)));
-    border: 0;
-    border-radius: 0;
+    gap: 10px;
+    padding-right: max(12px, var(--tt-inset-right, env(safe-area-inset-right)));
+    padding-left: max(12px, var(--tt-inset-left, env(safe-area-inset-left)));
+  }
+
+  .tt-interaction-game-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .tt-interaction-stage {
+    min-height: min(56vh, 520px);
+    flex: 0 0 auto;
+  }
+
+  .tt-interaction-command-deck {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 480px) {
+  .tt-interaction-launcher {
+    min-width: 48px;
+    padding-inline: 13px;
+    font-size: 0;
+  }
+
+  .tt-interaction-launcher::before {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .tt-interaction-controls button {
+    padding: 8px 9px;
+  }
+
+  .tt-interaction-actions {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tt-interaction-launcher[data-busy]::after {
+    animation: none;
+  }
+
   .tt-interaction-map [data-region-id] {
     transition: none;
   }

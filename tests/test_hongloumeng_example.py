@@ -8,8 +8,6 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-import yaml
-
 from scripts.generate import AgentGenerator
 
 
@@ -19,8 +17,8 @@ EXAMPLE_ROOT = REPO_ROOT / "examples" / "hongloumeng"
 
 class HongloumengExampleTest(unittest.TestCase):
     def load_regions(self):
-        source = EXAMPLE_ROOT / "interaction" / "regions.yaml"
-        return yaml.safe_load(source.read_text(encoding="utf-8"))["regions"]
+        source = EXAMPLE_ROOT / "interaction" / "regions.json"
+        return json.loads(source.read_text(encoding="utf-8"))["regions"]
 
     def test_map_regions_characters_and_worldbook_match(self):
         regions = self.load_regions()
@@ -52,7 +50,7 @@ class HongloumengExampleTest(unittest.TestCase):
                     EXAMPLE_ROOT
                     / "literature"
                     / "characters"
-                    / f"{character['label']}_stages.yaml"
+                    / f"{character['label']}_stages.json"
                 )
                 self.assertTrue(stage_file.exists(), stage_file)
 
@@ -62,14 +60,11 @@ class HongloumengExampleTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="hongloumeng-example-") as tmp:
             project = Path(tmp)
             shutil.copy2(EXAMPLE_ROOT / "AGENTS.md", project / "AGENTS.md")
-            for directory in ("interaction", "literature"):
+            for directory in ("interaction", "literature", "lorebooks"):
                 shutil.copytree(EXAMPLE_ROOT / directory, project / directory)
-            for directory in ("skills", "extensions", "theme"):
-                shutil.copytree(REPO_ROOT / directory, project / directory)
-            shutil.copy2(REPO_ROOT / "LICENSE", project / "LICENSE")
 
             with contextlib.redirect_stdout(io.StringIO()):
-                AgentGenerator(str(project)).run()
+                AgentGenerator(str(project), str(REPO_ROOT)).run()
 
             output = project / "output" / "agent"
             card = json.loads(
@@ -98,22 +93,75 @@ class HongloumengExampleTest(unittest.TestCase):
                 '"projectId": "hongloumeng-garden"',
                 (extension / "package-config.js").read_text(encoding="utf-8"),
             )
+            self.assertIn(
+                '"projectName": "红楼梦·大观园"',
+                (extension / "package-config.js").read_text(encoding="utf-8"),
+            )
+            extension_code = (extension / "index.js").read_text(encoding="utf-8")
+            self.assertIn("JSON.parse", extension_code)
+            self.assertNotIn("libs?.yaml", extension_code)
+            self.assertNotIn("/send", extension_code)
+            self.assertIn("quiet_prompt: runtime.lastActionRecord", extension_code)
+            self.assertIn("quietToLoud: true", extension_code)
+            self.assertIn("presentation: 'background'", extension_code)
+            self.assertIn("<tt_interaction_input", extension_code)
+            self.assertIn("runtime.runCommitted", extension_code)
+            self.assertIn("请更换 API", extension_code)
+            self.assertIn("model\\.tool_call_required", extension_code)
+            extension_css = (extension / "style.css").read_text(encoding="utf-8")
+            self.assertIn("grid-template-columns: minmax(0, 1fr)", extension_css)
+            self.assertIn("data-open", extension_css)
+            self.assertLess(
+                extension_code.index("store.listKeys"),
+                extension_code.index("store.getJson"),
+            )
 
             archive = output / "skills" / "interaction-system.ttskill"
             with zipfile.ZipFile(archive) as package:
+                interaction_skill = package.read("SKILL.md").decode("utf-8")
+                self.assertIn("workspace.list_files", interaction_skill)
+                self.assertIn("正常首轮", interaction_skill)
+                self.assertIn("<tt_interaction_input", interaction_skill)
+                self.assertIn("有界快速路径", interaction_skill)
+                self.assertIn("不得重复列目录", interaction_skill)
+                self.assertIn("workspace.commit", interaction_skill)
                 self.assertEqual(
                     (EXAMPLE_ROOT / "interaction" / "map.svg").read_bytes(),
                     package.read("assets/map.svg"),
                 )
-                actions = yaml.safe_load(package.read("assets/actions.yaml"))
+                actions = json.loads(package.read("assets/actions.json"))
                 self.assertEqual(
                     {"travel", "visit", "talk", "observe", "continue"},
                     {action["id"] for action in actions["actions"]},
                 )
-                runtime = yaml.safe_load(package.read("references/runtime.yaml"))
+                runtime = json.loads(package.read("references/runtime.json"))
                 self.assertEqual(
-                    "persist/interaction-state.yaml", runtime["state_file"]
+                    "persist/interaction-state.json", runtime["state_file"]
                 )
+
+            state_archive = output / "skills" / "state-system.ttskill"
+            with zipfile.ZipFile(state_archive) as package:
+                state_skill = package.read("SKILL.md").decode("utf-8")
+                self.assertIn("workspace.list_files", state_skill)
+                self.assertIn("workspace.write_file", state_skill)
+                self.assertIn("Agent 回合预算", state_skill)
+                self.assertIn("不读取任何角色阶段文件", state_skill)
+                self.assertIn("不重复读取", state_skill)
+                dimensions = json.loads(package.read("references/dimensions.json"))
+                policy = json.loads(package.read("references/update-policy.json"))
+                self.assertEqual("closeness", dimensions["dimensions"][0]["id"])
+                self.assertEqual(
+                    "persist/character_states.json", policy["persist_file"]
+                )
+
+            generated_lorebook = (
+                output / "lorebooks" / "hongloumeng-minimal.worldbook.json"
+            )
+            self.assertEqual(
+                (EXAMPLE_ROOT / "lorebooks" / "hongloumeng-minimal.worldbook.json")
+                .read_bytes(),
+                generated_lorebook.read_bytes(),
+            )
 
 
 if __name__ == "__main__":

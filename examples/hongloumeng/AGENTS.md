@@ -57,10 +57,8 @@ style_sample:
   source_file: ""
   max_length: 0
 
-stages_format: "yaml"
-
 state_system:
-  persist_file: "persist/character_states.yaml"
+  persist_file: "persist/character_states.json"
   max_characters_per_turn: 2
   max_delta_per_dimension: 5
   custom_rules: |

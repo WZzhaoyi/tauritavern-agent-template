@@ -8,9 +8,19 @@
 - 一个“亲疏”状态维度。
 - 一个诗社前夕的开场和一份最小世界书。
 
-地图与静态行动只负责提供初始入口。一次 Agent 回合结束后，`persist/interaction-state.yaml` 可以根据当前场景提供更具体的动态选项，例如“问起旧诗”“帮忙整理诗稿”或“暂不追问”。
+地图与静态行动只负责提供初始入口。一次 Agent 回合结束后，`persist/interaction-state.json` 可以根据当前场景提供更具体的动态选项，例如“问起旧诗”“帮忙整理诗稿”或“暂不追问”。
 
 示例不假定玩家必须扮演贾宝玉。玩家身份仍由当前 Persona 和场景决定，普通文字输入也始终有效。
+
+## 生成可导入产物
+
+在仓库根目录执行：
+
+```bash
+python scripts/generate.py examples/hongloumeng
+```
+
+结果位于 `examples/hongloumeng/output/agent/`，包括角色卡、Agent Profile、两个 `.ttskill`、交互扩展、主题和 `lorebooks/` 下的最小世界书。
 
 ## 运行测试
 
@@ -22,7 +32,7 @@ python -m unittest discover -s tests -v
 
 测试会在临时目录中组合通用模板与本示例，并验证：
 
-1. SVG 中的可点击区域和 `regions.yaml` 完全对应。
+1. SVG 中的可点击区域和 `regions.json` 完全对应。
 2. 每个区域声明的人物都存在于最小世界书和阶段资料中。
 3. 真实生成器能产出角色卡、Profile、两个 Skills 和项目专用 UI Extension。
 4. 打包后的 `interaction-system.ttskill` 确实包含本示例地图与行动。

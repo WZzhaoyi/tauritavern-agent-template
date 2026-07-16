@@ -1,7 +1,7 @@
 import config from './package-config.js';
 
 const ROOT_ID = `tt-interaction-${config.projectId}`;
-const TERMINAL_EVENTS = new Set(['run_completed', 'run_failed', 'run_cancelled']);
+const TERMINAL_EVENTS = new Set(['run_completed', 'run_failed', 'run_cancelled', 'run_partial_success']);
 const PROGRESS_LABELS = {
   run_created: '准备回合',
   profile_resolved: '载入配置',
@@ -15,7 +15,8 @@ const PROGRESS_LABELS = {
   persistent_changes_committed: '保存进度',
   run_completed: '回合完成',
   run_failed: '回合失败',
-  run_cancelled: '已取消'
+  run_cancelled: '已取消',
+  run_partial_success: '剧情已提交，但状态收尾失败'
 };
 
 const runtime = {
@@ -28,8 +29,14 @@ const runtime = {
   regions: [],
   state: null,
   lastActionRecord: null,
+  pendingActionLabel: null,
   runChatToken: null,
-  runStore: null
+  runStore: null,
+  runCommitted: false,
+  runStartedAt: null,
+  progressTimer: null,
+  statusMessage: '尚未载入',
+  statusTone: 'idle'
 };
 
 function ttApi() {
@@ -45,12 +52,25 @@ function currentChatToken() {
   return context?.chatId ?? context?.getCurrentChatId?.() ?? null;
 }
 
-function parseYaml(text) {
-  const yaml = window.SillyTavern?.libs?.yaml;
-  if (!yaml?.parse) {
-    throw new Error('当前 SillyTavern 上下文未提供 YAML 解析器');
+function parseJson(text, source) {
+  try {
+    return JSON.parse(text) ?? {};
+  } catch (error) {
+    throw new Error(`${source} 不是有效 JSON：${error.message}`);
   }
-  return yaml.parse(text) ?? {};
+}
+
+function formatRunFailure(event) {
+  const detail = event?.payload?.error?.message ?? event?.payload?.message ?? '';
+  const code = event?.payload?.code ?? event?.code ?? '';
+  const raw = `${code} ${detail}`;
+  if (/upstream request failed|error from provider|network error|fetch failed/i.test(raw)) {
+    return 'LLM API 上游连接失败；请更换 API 或工具调用稳定的模型后重试';
+  }
+  if (/model\.tool_call_required|must use agent tools|workspace_finish/i.test(raw)) {
+    return '模型未在 Agent 回合预算内完成工具流程；请确认已导入快速事务 Skills，或更换工具调用稳定的模型';
+  }
+  return detail ? `回合失败：${detail}` : '回合失败；可重试或更换模型';
 }
 
 function activeCardMatches() {
@@ -86,20 +106,46 @@ function getUi() {
 }
 
 function setStatus(message, tone = 'idle') {
+  runtime.statusMessage = message;
+  runtime.statusTone = tone;
+  renderStatus();
+}
+
+function renderStatus() {
   const { status } = getUi();
   if (!status) return;
-  status.textContent = message;
-  status.dataset.tone = tone;
+  const elapsed = runtime.busy && runtime.runStartedAt
+    ? ` · ${Math.max(0, Math.floor((Date.now() - runtime.runStartedAt) / 1000))}s`
+    : '';
+  const action = runtime.busy && runtime.pendingActionLabel
+    ? `${runtime.pendingActionLabel} · `
+    : '';
+  status.textContent = `${action}${runtime.statusMessage}${elapsed}`;
+  status.dataset.tone = runtime.statusTone;
+}
+
+function startProgressTimer() {
+  clearInterval(runtime.progressTimer);
+  runtime.progressTimer = window.setInterval(renderStatus, 1000);
+}
+
+function stopProgressTimer() {
+  clearInterval(runtime.progressTimer);
+  runtime.progressTimer = null;
 }
 
 function setBusy(busy) {
   runtime.busy = busy;
-  const { root, cancel } = getUi();
+  const { root, cancel, launcher } = getUi();
   root?.toggleAttribute('data-busy', busy);
+  launcher?.toggleAttribute('data-busy', busy);
   root?.querySelectorAll('[data-action-id]').forEach(button => {
     button.disabled = busy;
   });
   if (cancel) cancel.hidden = !busy;
+  if (busy) startProgressTimer();
+  else stopProgressTimer();
+  renderStatus();
 }
 
 function createUi() {
@@ -108,21 +154,30 @@ function createUi() {
   const root = element('div', 'tt-interaction-root');
   root.id = ROOT_ID;
 
-  const launcher = element('button', 'tt-interaction-launcher', '行动');
+  const launcher = element('button', 'tt-interaction-launcher', '地图与行动');
   launcher.type = 'button';
   launcher.dataset.role = 'launcher';
+  launcher.dataset.ttMobileSurface = 'free-window';
+  launcher.setAttribute('aria-label', '打开地图与行动');
   launcher.setAttribute('aria-expanded', 'false');
 
   const backdrop = element('div', 'tt-interaction-backdrop');
   backdrop.dataset.role = 'backdrop';
+  backdrop.dataset.ttMobileSurface = 'backdrop';
 
   const panel = element('section', 'tt-interaction-panel');
   panel.dataset.role = 'panel';
   panel.dataset.ttMobileSurface = 'fullscreen-window';
-  panel.setAttribute('aria-label', '暂停式交互面板');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-label', '地图与行动');
 
   const header = element('header', 'tt-interaction-header');
-  const title = element('div', 'tt-interaction-title', '行动面板');
+  const brand = element('div', 'tt-interaction-brand');
+  brand.append(
+    element('span', 'tt-interaction-kicker', '暂停式回合'),
+    element('div', 'tt-interaction-title', config.projectName || '地图与行动')
+  );
   const controls = element('div', 'tt-interaction-controls');
   const retry = element('button', '', '重试回合');
   retry.type = 'button';
@@ -132,38 +187,46 @@ function createUi() {
   cancel.type = 'button';
   cancel.dataset.role = 'cancel';
   cancel.hidden = true;
-  const close = element('button', '', '关闭');
+  const close = element('button', '', '返回聊天');
   close.type = 'button';
   close.dataset.role = 'close';
   controls.append(retry, cancel, close);
-  header.append(title, controls);
+  header.append(brand, controls);
 
   const status = element('div', 'tt-interaction-status', '尚未载入');
   status.dataset.role = 'status';
+  status.setAttribute('aria-live', 'polite');
   const summary = element('div', 'tt-interaction-summary');
   summary.dataset.role = 'summary';
   const map = element('div', 'tt-interaction-map');
   map.dataset.role = 'map';
 
-  const targetSection = element('section', 'tt-interaction-section');
+  const targetSection = element('section', 'tt-interaction-section tt-interaction-target-section');
   targetSection.append(element('h3', '', '目标'));
   const targets = element('div', 'tt-interaction-targets');
   targets.dataset.role = 'targets';
   targetSection.append(targets);
 
-  const actionSection = element('section', 'tt-interaction-section');
+  const actionSection = element('section', 'tt-interaction-section tt-interaction-action-section');
   actionSection.append(element('h3', '', '行动'));
   const actions = element('div', 'tt-interaction-actions');
   actions.dataset.role = 'actions';
   actionSection.append(actions);
 
-  const loreSection = element('section', 'tt-interaction-section');
+  const loreSection = element('section', 'tt-interaction-section tt-interaction-lore-section');
   loreSection.append(element('h3', '', '本轮设定'));
   const lore = element('div', 'tt-interaction-lore');
   lore.dataset.role = 'lore';
   loreSection.append(lore);
 
-  panel.append(header, status, summary, map, targetSection, actionSection, loreSection);
+  const stage = element('main', 'tt-interaction-stage');
+  stage.append(summary, map);
+  const commandDeck = element('aside', 'tt-interaction-command-deck');
+  commandDeck.append(targetSection, actionSection, loreSection);
+  const gameLayout = element('div', 'tt-interaction-game-layout');
+  gameLayout.append(stage, commandDeck);
+
+  panel.append(header, status, gameLayout);
   root.append(launcher, backdrop, panel);
   document.body.append(root);
 
@@ -214,12 +277,12 @@ async function loadInterface() {
   setStatus('载入交互资源…', 'busy');
   try {
     const [actionsText, regionsText, mapText] = await Promise.all([
-      readSkillText('assets/actions.yaml'),
-      readSkillText('assets/regions.yaml'),
+      readSkillText('assets/actions.json'),
+      readSkillText('assets/regions.json'),
       readSkillText('assets/map.svg', true)
     ]);
-    runtime.baseActions = parseYaml(actionsText).actions ?? [];
-    runtime.regions = parseYaml(regionsText).regions ?? [];
+    runtime.baseActions = parseJson(actionsText, 'assets/actions.json').actions ?? [];
+    runtime.regions = parseJson(regionsText, 'assets/regions.json').regions ?? [];
     renderMap(mapText);
     await loadCachedState();
     renderState();
@@ -362,24 +425,15 @@ async function submitAction(action) {
         }
       : null
   };
-  runtime.lastActionRecord = `[交互行动] ${JSON.stringify(record)}`;
+  const targetLabel = record.target?.label ? ` · ${record.target.label}` : '';
+  runtime.pendingActionLabel = `${record.action.label}${targetLabel}`;
+  runtime.lastActionRecord = [
+    '以下内容是交互界面为本次 Agent 运行提供的私有控制输入。',
+    '只执行其中最后一个 tt_interaction_input；聊天历史中的旧版 [交互行动] 已经发生，不得重放。',
+    '不得在过程叙述、output/main.md 或聊天正文中引用、转录或解释本标签与 JSON。',
+    `<tt_interaction_input version="1">${JSON.stringify(record)}</tt_interaction_input>`
+  ].join('\n');
   await startRun(true);
-}
-
-async function sendActionRecord(text) {
-  const context = stContext();
-  if (!context?.executeSlashCommandsWithOptions) {
-    throw new Error('当前 SillyTavern 上下文无法写入玩家行动');
-  }
-  const command = `/send compact=true ${JSON.stringify(text)}`;
-  const result = await context.executeSlashCommandsWithOptions(command, {
-    handleParserErrors: false,
-    handleExecutionErrors: false,
-    source: `${config.projectId}-interaction`
-  });
-  if (result?.isError || result?.isAborted) {
-    throw new Error(result.errorMessage || result.abortReason || '玩家行动写入失败');
-  }
 }
 
 async function startRun(writeAction) {
@@ -391,30 +445,42 @@ async function startRun(writeAction) {
   }
 
   setBusy(true);
+  runtime.runStartedAt = Date.now();
+  runtime.runCommitted = false;
   const { retry } = getUi();
   if (retry) retry.hidden = true;
-  setStatus(writeAction ? '记录玩家行动…' : '重新启动本回合…', 'busy');
+  setStatus(writeAction ? '启动 Agent 回合' : '重新启动本回合', 'busy');
 
   try {
+    runtime.unsubscribe?.();
+    runtime.unsubscribe = null;
     if (writeAction && agent.profiles?.load) {
       const loaded = await agent.profiles.load({ profileId: config.profileId });
       if (!loaded?.profile) {
         throw new Error(`未安装 Agent Profile：${config.profileId}`);
       }
     }
-    if (writeAction) await sendActionRecord(runtime.lastActionRecord);
     runtime.runChatToken = currentChatToken();
     runtime.runStore = await chatStore();
     const run = await agent.startRunFromLegacyGenerate({
       generationType: 'normal',
+      // 行动只进入本次 prompt snapshot，不向聊天时间线写入协议消息。
+      // 失败重试仍使用 runtime.lastActionRecord，不会丢失玩家选择。
+      generateOptions: {
+        quiet_prompt: runtime.lastActionRecord,
+        quietToLoud: true
+      },
       profileId: config.profileId,
-      presentation: 'foreground',
-      options: { presentation: 'foreground', stream: false }
+      presentation: 'background',
+      options: { presentation: 'background', stream: false }
     });
     runtime.runId = run.runId;
     setStatus('Agent 正在处理本回合…', 'busy');
-    runtime.unsubscribe?.();
-    runtime.unsubscribe = agent.subscribe(run.runId, event => handleRunEvent(event));
+    const subscribedRunId = run.runId;
+    runtime.unsubscribe = agent.subscribe(run.runId, event => {
+      if (runtime.runId !== subscribedRunId) return;
+      void handleRunEvent(event);
+    });
   } catch (error) {
     console.error('[TauriTavern Interaction] run start failed', error);
     setBusy(false);
@@ -424,6 +490,8 @@ async function startRun(writeAction) {
 }
 
 async function handleRunEvent(event) {
+  if (event?.runId && event.runId !== runtime.runId) return;
+  if (event.type === 'chat_commit_completed') runtime.runCommitted = true;
   const label = PROGRESS_LABELS[event.type];
   if (label && runtime.runChatToken === currentChatToken()) {
     setStatus(label, event.type === 'run_failed' ? 'error' : 'busy');
@@ -437,20 +505,39 @@ async function handleRunEvent(event) {
   const sameChat = runtime.runChatToken === currentChatToken();
 
   if (event.type === 'run_completed') {
-    runtime.lastActionRecord = null;
-    if (retry) retry.hidden = true;
     await refreshStateFromRun(runtime.runId, sameChat, runtime.runStore);
-    if (sameChat) {
+    if (!runtime.runCommitted) {
+      if (retry) retry.hidden = false;
+      if (sameChat) {
+        setStatus('Agent 已结束，但未通过 workspace.commit 发布剧情；可重试本回合', 'error');
+      }
+    } else {
+      runtime.lastActionRecord = null;
+      runtime.pendingActionLabel = null;
+      if (retry) retry.hidden = true;
+    }
+    if (sameChat && runtime.runCommitted) {
       await renderLore();
-      setStatus('回合完成，请选择下一项行动', 'ready');
+      setStatus('回合完成；返回聊天阅读剧情，或继续选择行动', 'ready');
+    }
+  } else if (event.type === 'run_partial_success') {
+    runtime.lastActionRecord = null;
+    runtime.pendingActionLabel = null;
+    if (retry) retry.hidden = true;
+    if (sameChat) {
+      setStatus('剧情已发布，但状态收尾失败；请返回聊天检查本回合', 'error');
     }
   } else {
     if (!sameChat) runtime.lastActionRecord = null;
     if (retry) retry.hidden = !runtime.lastActionRecord;
     if (sameChat) {
-      setStatus(PROGRESS_LABELS[event.type], event.type === 'run_failed' ? 'error' : 'idle');
+      const message = event.type === 'run_failed'
+        ? formatRunFailure(event)
+        : PROGRESS_LABELS[event.type];
+      setStatus(message, event.type === 'run_failed' ? 'error' : 'idle');
     }
   }
+  runtime.runStartedAt = null;
   runtime.runStore = null;
 }
 
@@ -468,7 +555,7 @@ async function refreshStateFromRun(runId, render, cacheStore) {
   if (!runId) return;
   try {
     const file = await ttApi().agent.readWorkspaceFile({ runId, path: config.stateFile });
-    const state = parseYaml(file.text);
+    const state = parseJson(file.text, config.stateFile);
     await writeCachedState({ runId, sha256: file.sha256, state }, cacheStore);
     if (render) {
       runtime.state = state;
@@ -490,15 +577,17 @@ async function chatStore() {
 
 async function loadCachedState() {
   const store = await chatStore();
-  if (!store?.getJson) return;
+  if (!store?.listKeys || !store?.getJson) return;
   try {
+    const keys = await store.listKeys({ namespace: config.cacheNamespace });
+    if (!keys.includes('interaction-state')) return;
     const cached = await store.getJson({
       namespace: config.cacheNamespace,
       key: 'interaction-state'
     });
     if (cached?.state) runtime.state = cached.state;
   } catch {
-    // Missing cache is expected on a new chat.
+    // Cache access is an optional enhancement and must not block the panel.
   }
 }
 

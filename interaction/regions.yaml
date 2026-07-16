@@ -1,7 +1,0 @@
-version: 1
-
-# 替换为本作品需要的地点。id 应与 map.svg 的 data-region-id 对应。
-regions:
-  - id: "start"
-    label: "{起始地点}"
-    description: "{供玩家快速判断地点意义的一句话说明}"

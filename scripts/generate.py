@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 TauriTavern Agent 生成器
-版本: 2.5.0
+版本: 2.6.0
 
 按 build.target 生成互斥的运行目标产物：
   - agent     → Agent Profile + SKILLS + Agent 角色卡 + 可选交互扩展 + 主题
@@ -43,14 +43,16 @@ class ConfigLoader:
 
 
 class AgentGenerator:
-    def __init__(self, project_root: str):
+    def __init__(self, project_root: str, template_root: Optional[str] = None):
         self.root = Path(project_root)
+        self.template_root = Path(template_root) if template_root else self.root
         self.cfg = ConfigLoader.load(self.root)
 
         paths = self.cfg.get("paths", {})
         self.characters_dir = self.root / paths.get("characters_dir", "literature/characters")
         self.scenarios_dir = self.root / paths.get("scenarios_dir", "literature/scenarios")
         self.interaction_dir = self.root / "interaction"
+        self.lorebooks_dir = self.root / "lorebooks"
         self.output_root = self.root / paths.get("output_dir", "output")
         self.build_target = self._validate_build_target(self.cfg.get("build", {}))
         target_dir = "agent" if self.build_target == "agent" else "non-agent"
@@ -65,6 +67,13 @@ class AgentGenerator:
         self.interaction_cfg = self._validate_interaction_config(
             self.cfg.get("interaction", {})
         )
+
+    def _source_path(self, relative_path: str) -> Path:
+        """项目可覆盖模板资源；示例缺省时回退到模板仓库。"""
+        project_path = self.root / relative_path
+        if project_path.exists() or self.template_root == self.root:
+            return project_path
+        return self.template_root / relative_path
 
     @staticmethod
     def _validate_build_target(value: object) -> str:
@@ -150,7 +159,7 @@ class AgentGenerator:
             raise ValueError("state_system must be a mapping")
 
         cfg = {
-            "persist_file": value.get("persist_file", "persist/character_states.yaml"),
+            "persist_file": value.get("persist_file", "persist/character_states.json"),
             "max_characters_per_turn": value.get("max_characters_per_turn", 2),
             "max_delta_per_dimension": value.get("max_delta_per_dimension", 5),
             "custom_rules": value.get("custom_rules", ""),
@@ -191,7 +200,7 @@ class AgentGenerator:
         return {
             "enabled": enabled,
             "skill_id": "interaction-system",
-            "state_file": "persist/interaction-state.yaml",
+            "state_file": "persist/interaction-state.json",
         }
 
     # ── SKILLS 验证 ──────────────────────────────────────────
@@ -205,7 +214,7 @@ class AgentGenerator:
                 continue
             if not isinstance(sid, str) or not re.fullmatch(r"[a-z0-9_-]+", sid):
                 raise ValueError(f"Invalid Skill id: {sid!r}")
-            skill_dir = self.root / src
+            skill_dir = self._source_path(src)
             skill_md = skill_dir / "SKILL.md"
             if not skill_md.exists():
                 raise FileNotFoundError(f"Missing {skill_md}")
@@ -273,8 +282,8 @@ class AgentGenerator:
 
         references_dir = staged_dir / "references"
         references_dir.mkdir(parents=True, exist_ok=True)
-        (references_dir / "dimensions.yaml").write_text(
-            yaml.safe_dump({"dimensions": self.dimensions}, allow_unicode=True, sort_keys=False),
+        (references_dir / "dimensions.json").write_text(
+            json.dumps({"dimensions": self.dimensions}, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         update_policy = {
@@ -288,19 +297,16 @@ class AgentGenerator:
             },
             "custom_rules": self.state_cfg["custom_rules"],
         }
-        (references_dir / "update-policy.yaml").write_text(
-            yaml.safe_dump(update_policy, allow_unicode=True, sort_keys=False),
+        (references_dir / "update-policy.json").write_text(
+            json.dumps(update_policy, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
         stages_dir = references_dir / "character-stages"
         stages_dir.mkdir(exist_ok=True)
-        stages_format = self.cfg.get("stages_format", "yaml")
-        if stages_format not in {"json", "yaml"}:
-            raise ValueError("stages_format must be 'json' or 'yaml'")
         if self.characters_dir.exists():
-            for source in sorted(self.characters_dir.glob(f"*_stages.{stages_format}")):
-                self._validate_stage_file(source, stages_format)
+            for source in sorted(self.characters_dir.glob("*_stages.json")):
+                self._validate_stage_file(source)
                 shutil.copy2(source, stages_dir / source.name)
 
     def _inject_interaction_assets(self, staged_dir: Path) -> None:
@@ -311,7 +317,7 @@ class AgentGenerator:
         references_dir.mkdir(parents=True, exist_ok=True)
 
         self._validate_interaction_sources()
-        for filename in ("actions.yaml", "regions.yaml", "map.svg"):
+        for filename in ("actions.json", "regions.json", "map.svg"):
             source = self.interaction_dir / filename
             if source.exists():
                 shutil.copy2(source, assets_dir / filename)
@@ -322,8 +328,8 @@ class AgentGenerator:
             "state_file": self.interaction_cfg["state_file"],
             "extension_fields": "allowed",
         }
-        (references_dir / "runtime.yaml").write_text(
-            yaml.safe_dump(runtime, allow_unicode=True, sort_keys=False),
+        (references_dir / "runtime.json").write_text(
+            json.dumps(runtime, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
@@ -334,16 +340,16 @@ class AgentGenerator:
             )
 
         for filename, root_key in (
-            ("actions.yaml", "actions"),
-            ("regions.yaml", "regions"),
+            ("actions.json", "actions"),
+            ("regions.json", "regions"),
         ):
             source = self.interaction_dir / filename
             if not source.exists():
                 raise FileNotFoundError(f"Missing {source}")
             try:
-                data = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
-            except yaml.YAMLError as e:
-                raise ValueError(f"Invalid interaction data in {source}: {e}")
+                data = json.loads(source.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid interaction JSON in {source}: {e}")
             items = data.get(root_key) if isinstance(data, dict) else None
             if not isinstance(items, list):
                 raise ValueError(f"{source} must contain a {root_key} list")
@@ -368,11 +374,11 @@ class AgentGenerator:
         if map_file.exists() and "<svg" not in map_file.read_text(encoding="utf-8"):
             raise ValueError(f"{map_file} must be an SVG text file")
 
-    def _validate_stage_file(self, source: Path, stages_format: str) -> None:
+    def _validate_stage_file(self, source: Path) -> None:
         try:
             text = source.read_text(encoding="utf-8")
-            data = json.loads(text) if stages_format == "json" else yaml.safe_load(text)
-        except (json.JSONDecodeError, yaml.YAMLError) as e:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
             raise ValueError(f"Invalid stage data in {source}: {e}")
 
         states = data.get("character_states") if isinstance(data, dict) else None
@@ -412,18 +418,14 @@ class AgentGenerator:
 
     def _load_stage_files(self) -> List[tuple]:
         """读取并验证当前格式的全部角色阶段数据。"""
-        stages_format = self.cfg.get("stages_format", "yaml")
-        if stages_format not in {"json", "yaml"}:
-            raise ValueError("stages_format must be 'json' or 'yaml'")
-
         results = []
         if not self.characters_dir.exists():
             return results
-        for source in sorted(self.characters_dir.glob(f"*_stages.{stages_format}")):
-            self._validate_stage_file(source, stages_format)
+        for source in sorted(self.characters_dir.glob("*_stages.json")):
+            self._validate_stage_file(source)
             text = source.read_text(encoding="utf-8")
-            data = json.loads(text) if stages_format == "json" else yaml.safe_load(text)
-            suffix = f"_stages.{stages_format}"
+            data = json.loads(text)
+            suffix = "_stages.json"
             character = source.name[: -len(suffix)]
             results.append((character, source, data))
         return results
@@ -431,14 +433,8 @@ class AgentGenerator:
     def generate_state_worldbook(self) -> dict:
         """将 _stages 编译为供 legacy 状态运行时读取的可导入世界书。"""
         entries = {}
-        stages_format = self.cfg.get("stages_format", "yaml")
         for uid, (character, _source, data) in enumerate(self._load_stage_files()):
-            if stages_format == "json":
-                stages_content = json.dumps(data, ensure_ascii=False, indent=2)
-            else:
-                stages_content = yaml.safe_dump(
-                    data, allow_unicode=True, sort_keys=False
-                ).strip()
+            stages_content = json.dumps(data, ensure_ascii=False, indent=2)
             content = (
                 f'<character name="{html.escape(character, quote=True)}">\n'
                 "<character_states>\n"
@@ -527,18 +523,23 @@ class AgentGenerator:
     def _build_agent_skill_bridge(self) -> str:
         bridge = (
             "【Agent 状态扩展】\n"
-            "每次运行必须先查阅名为 state-system 的 Skill，并按其说明读取当前持久状态与必要的角色阶段资料。"
+            "每次运行必须查阅名为 state-system 的 Skill，并按其有界快速路径读取或初始化持久状态。"
             "只在当前轮有明确证据时更新状态；没有变化时保持原值。"
+            "普通移动、观察或初始化不得批量读取角色阶段资料；独立读取和写入应在同一模型回合并行执行，且不得重复读取。"
             "可按需使用用户的其他可见 Skills 扩展写作流程，但不得覆盖角色卡、已激活世界书或 state-system 的状态契约。"
         )
         if self.interaction_cfg["enabled"]:
             bridge += (
                 "\n\n【暂停式交互扩展】\n"
                 "每次运行还要查阅名为 interaction-system 的 Skill。"
-                "把普通用户输入或由界面生成的 [交互行动] 都视为玩家本轮选择；"
-                "完成叙事与状态事务后，更新 persist/interaction-state.yaml，"
+                "把普通用户输入或界面在本次隐式 prompt 中传入的最后一个 <tt_interaction_input> 视为玩家本轮选择；"
+                "历史中的旧版 [交互行动] 不得重放，也不得在正文中转录任何控制协议。"
+                "完成叙事与状态事务后，更新 persist/interaction-state.json，"
                 "为界面提供下一轮可选目标和行动。该 Skill 只定义交互桥接协议，"
                 "不得限制角色卡、世界书或用户其他 Skills 允许的创作空间。"
+                "未完成前不要用普通文本汇报读取或写入进度；接近回合上限时停止可选检查，保持不确定状态不变并优先发布正文。"
+                "即使本轮以后台 presentation 运行，也必须将叙事写入 output/main.md，"
+                "通过 workspace.commit 发布后再 workspace.finish。"
             )
         return bridge
 
@@ -645,11 +646,11 @@ class AgentGenerator:
             return ""
 
         if self.build_target == "agent":
-            payload = yaml.safe_dump(
+            payload = json.dumps(
                 {"version": 1, "characters": normalized},
-                allow_unicode=True,
-                sort_keys=False,
-            ).strip()
+                ensure_ascii=False,
+                indent=2,
+            )
             return f"<agent_state_init>\n{payload}\n</agent_state_init>"
 
         commands = []
@@ -752,7 +753,7 @@ class AgentGenerator:
         src = theme_cfg.get("source_file")
         if not src:
             return None
-        src_path = self.root / src
+        src_path = self._source_path(src)
         if not src_path.exists():
             print(f"  [WARN] Theme file not found: {src_path}")
             return None
@@ -768,7 +769,7 @@ class AgentGenerator:
         if not self.interaction_cfg["enabled"]:
             return None
 
-        source_dir = self.root / "extensions" / "interaction-runtime"
+        source_dir = self._source_path("extensions/interaction-runtime")
         if not source_dir.exists():
             raise FileNotFoundError(f"Missing interaction runtime: {source_dir}")
 
@@ -777,7 +778,7 @@ class AgentGenerator:
         if destination.exists():
             shutil.rmtree(destination)
         shutil.copytree(source_dir, destination)
-        license_file = self.root / "LICENSE"
+        license_file = self._source_path("LICENSE")
         if license_file.exists():
             shutil.copy2(license_file, destination / "LICENSE")
 
@@ -791,6 +792,7 @@ class AgentGenerator:
 
         package_config = {
             "projectId": self.project_id,
+            "projectName": self.pname,
             "profileId": self.project_id,
             "skillName": self.interaction_cfg["skill_id"],
             "stateFile": self.interaction_cfg["state_file"],
@@ -805,6 +807,28 @@ class AgentGenerator:
         (destination / "package-config.js").write_text(config_text, encoding="utf-8")
         print(f"  [OK] extensions/{extension_id}/")
         return str(destination)
+
+    def copy_project_lorebooks(self) -> List[str]:
+        """原样复制作者维护的传统世界书，方便示例与套件一起分发。"""
+        if not self.lorebooks_dir.exists():
+            return []
+        sources = sorted(self.lorebooks_dir.glob("*.json"))
+        if not sources:
+            return []
+
+        destination = self.output_dir / "lorebooks"
+        destination.mkdir(parents=True, exist_ok=True)
+        copied = []
+        for source in sources:
+            try:
+                json.loads(source.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid lorebook JSON in {source}: {e}")
+            target = destination / source.name
+            shutil.copy2(source, target)
+            print(f"  [OK] lorebooks/{source.name}")
+            copied.append(str(target))
+        return copied
 
     def prune_disabled_interaction_outputs(self) -> None:
         """开关关闭后移除上一次 Agent 构建留下的可选交互产物。"""
@@ -861,6 +885,10 @@ class AgentGenerator:
         )
         print(f"  [OK] {card_path.name}")
 
+        if self.lorebooks_dir.exists() and any(self.lorebooks_dir.glob("*.json")):
+            print("\n[复制] 项目世界书 ...")
+            self.copy_project_lorebooks()
+
         if self.build_target == "agent":
             if self.interaction_cfg["enabled"]:
                 print("\n[生成] 暂停式交互扩展 ...")
@@ -877,19 +905,24 @@ class AgentGenerator:
         print("导入 TauriTavern")
         print(f"{'='*60}")
         if self.build_target == "agent":
-            interaction_step = ""
+            extra_steps = []
             if self.interaction_cfg["enabled"]:
-                interaction_step = (
-                    f"  5. 按 extensions/{self.project_id}-interaction/README.md "
-                    "安装交互扩展\n"
+                extra_steps.append(
+                    f"按 extensions/{self.project_id}-interaction/README.md 安装交互扩展"
                 )
+            if self.lorebooks_dir.exists() and any(self.lorebooks_dir.glob("*.json")):
+                extra_steps.append("导入 lorebooks/ 下的传统世界书并绑定角色卡或聊天")
+            extra_text = "\n".join(
+                f"  {index}. {step}" for index, step in enumerate(extra_steps, start=5)
+            )
             print(f"""
   产物目录：output/agent/
   1. Characters → Import → {self.project_id}.character-card.json
   2. Agent 系统面板 → SKILLS → 逐个导入 skills/*.ttskill
   3. Agent 系统面板 → 配置档案 → 导入 → {self.project_id}.agent-profile.json
   4. 设为 Active Profile，开启 Agent Mode
-{interaction_step}""")
+{extra_text}
+""")
         else:
             print(f"""
   产物目录：output/non-agent/
@@ -905,10 +938,14 @@ class AgentGenerator:
 
 def main():
     script_dir = Path(__file__).resolve().parent
-    project_root = script_dir.parent
+    template_root = script_dir.parent
+    if len(sys.argv) > 2:
+        print("Usage: python scripts/generate.py [project_root]", file=sys.stderr)
+        sys.exit(2)
+    project_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else template_root
 
     try:
-        AgentGenerator(str(project_root)).run()
+        AgentGenerator(str(project_root), str(template_root)).run()
     except Exception as e:
         print(f"\n[Error] {e}", file=sys.stderr)
         sys.exit(1)
