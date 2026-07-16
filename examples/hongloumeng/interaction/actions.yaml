@@ -1,0 +1,33 @@
+version: 1
+
+# 仅提供跨场景都成立的基础意图。具体文学性选项由 Agent 每轮动态生成。
+actions:
+  - id: "travel"
+    label: "前往"
+    scope: "region"
+    confirm: false
+    description: "前往所选地点。"
+
+  - id: "visit"
+    label: "拜访"
+    scope: "character"
+    confirm: false
+    description: "按照当前身份和礼数拜访对方。"
+
+  - id: "talk"
+    label: "交谈"
+    scope: "character"
+    confirm: false
+    description: "与对方开始一段交谈。"
+
+  - id: "observe"
+    label: "观察"
+    scope: ["region", "character", "object"]
+    confirm: false
+    description: "留意环境、神态与当前气氛。"
+
+  - id: "continue"
+    label: "继续"
+    scope: "global"
+    confirm: false
+    description: "让当前场景自然推进一步。"

@@ -1,0 +1,30 @@
+version: 1
+
+regions:
+  - id: "yihong-courtyard"
+    label: "怡红院"
+    description: "贾宝玉居所，也是园中消息与日常往来较集中的地方。"
+    characters:
+      - id: "jia-baoyu"
+        label: "贾宝玉"
+
+  - id: "xiaoxiang-house"
+    label: "潇湘馆"
+    description: "林黛玉居所，竹影清幽，私下言语尤其需要体察分寸。"
+    characters:
+      - id: "lin-daiyu"
+        label: "林黛玉"
+
+  - id: "hengwu-garden"
+    label: "蘅芜苑"
+    description: "薛宝钗居所，陈设简净，往来气氛通常较为克制。"
+    characters:
+      - id: "xue-baochai"
+        label: "薛宝钗"
+
+  - id: "qiushuang-study"
+    label: "秋爽斋"
+    description: "贾探春居所，适合诗社议事和处理园中事务。"
+    characters:
+      - id: "jia-tanchun"
+        label: "贾探春"

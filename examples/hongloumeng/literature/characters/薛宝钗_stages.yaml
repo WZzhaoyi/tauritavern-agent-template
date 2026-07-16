@@ -1,0 +1,13 @@
+character_states:
+  - id: "closeness"
+    name: "亲疏"
+    ranges:
+      - min: 0
+        max: 40
+        content: "礼数周到、回答稳妥，不主动向玩家透露可能引起议论的私事。"
+      - min: 41
+        max: 70
+        content: "会给出切实建议并照顾玩家处境，但仍注意公开场合的分寸。"
+      - min: 71
+        max: 100
+        content: "把玩家视为可靠之人，愿意讨论自己的顾虑，表达仍然克制而审慎。"

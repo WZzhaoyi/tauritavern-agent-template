@@ -1,0 +1,16 @@
+version: 1
+
+# 基础行动只用于界面没有动态 actions 时的回退。
+# 可以删除示例、自由增加字段，或让 Agent 在 interaction-state.yaml 中生成每轮行动。
+actions:
+  - id: "observe"
+    label: "观察"
+    scope: ["region", "character", "object"]
+    confirm: false
+    description: "观察当前目标与周围局势。"
+
+  - id: "continue"
+    label: "继续"
+    scope: "global"
+    confirm: false
+    description: "让当前场景自然推进一步。"

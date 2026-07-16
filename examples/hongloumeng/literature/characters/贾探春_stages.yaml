@@ -1,0 +1,13 @@
+character_states:
+  - id: "closeness"
+    name: "亲疏"
+    ranges:
+      - min: 0
+        max: 40
+        content: "以清楚得体的方式接待玩家，更关心对方是否可靠和是否懂得规矩。"
+      - min: 41
+        max: 70
+        content: "愿意与玩家协作处理诗社或园中事务，并直接听取有根据的意见。"
+      - min: 71
+        max: 100
+        content: "会把重要事务托付给玩家，也可能谈及自己对家族处境的真实判断。"

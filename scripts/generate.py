@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 TauriTavern Agent 生成器
-版本: 2.4.0
+版本: 2.5.0
 
 按 build.target 生成互斥的运行目标产物：
-  - agent     → Agent Profile + SKILLS + Agent 角色卡 + 主题
+  - agent     → Agent Profile + SKILLS + Agent 角色卡 + 可选交互扩展 + 主题
   - non_agent → 传统状态世界书 + legacy 角色卡
 """
 
@@ -50,6 +50,7 @@ class AgentGenerator:
         paths = self.cfg.get("paths", {})
         self.characters_dir = self.root / paths.get("characters_dir", "literature/characters")
         self.scenarios_dir = self.root / paths.get("scenarios_dir", "literature/scenarios")
+        self.interaction_dir = self.root / "interaction"
         self.output_root = self.root / paths.get("output_dir", "output")
         self.build_target = self._validate_build_target(self.cfg.get("build", {}))
         target_dir = "agent" if self.build_target == "agent" else "non-agent"
@@ -61,6 +62,9 @@ class AgentGenerator:
         self.project_id = self._validate_project_id(project.get("id"))
         self.dimensions = self._validate_dimensions(self.cfg.get("dimensions", []))
         self.state_cfg = self._validate_state_config(self.cfg.get("state_system", {}))
+        self.interaction_cfg = self._validate_interaction_config(
+            self.cfg.get("interaction", {})
+        )
 
     @staticmethod
     def _validate_build_target(value: object) -> str:
@@ -176,6 +180,20 @@ class AgentGenerator:
         cfg["non_agent"] = {"emit_legacy_updates": emit_legacy}
         return cfg
 
+    @staticmethod
+    def _validate_interaction_config(value: object) -> dict:
+        """交互层只保留一个开关，其余使用稳定约定。"""
+        if not isinstance(value, dict):
+            raise ValueError("interaction must be a mapping")
+        enabled = value.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise ValueError("interaction.enabled must be boolean")
+        return {
+            "enabled": enabled,
+            "skill_id": "interaction-system",
+            "state_file": "persist/interaction-state.yaml",
+        }
+
     # ── SKILLS 验证 ──────────────────────────────────────────
 
     def validate_skills(self) -> List[dict]:
@@ -183,6 +201,8 @@ class AgentGenerator:
         results = []
         for s in skills_cfg:
             sid, src = s["id"], s["source_dir"]
+            if sid == self.interaction_cfg["skill_id"] and not self.interaction_cfg["enabled"]:
+                continue
             if not isinstance(sid, str) or not re.fullmatch(r"[a-z0-9_-]+", sid):
                 raise ValueError(f"Invalid Skill id: {sid!r}")
             skill_dir = self.root / src
@@ -200,6 +220,13 @@ class AgentGenerator:
                     f"Skill id {sid!r} must match SKILL.md frontmatter name {fm['name']!r}"
                 )
             results.append({"id": sid, "dir": skill_dir, "frontmatter": fm})
+
+        if self.interaction_cfg["enabled"] and not any(
+            skill["id"] == self.interaction_cfg["skill_id"] for skill in results
+        ):
+            raise ValueError(
+                "interaction.enabled requires interaction-system in the skills list"
+            )
         return results
 
     @staticmethod
@@ -238,6 +265,9 @@ class AgentGenerator:
 
     def _inject_generated_references(self, skill_id: str, staged_dir: Path) -> None:
         """仅将 Agent 状态工作流所需的资料写入打包副本。"""
+        if skill_id == self.interaction_cfg["skill_id"]:
+            self._inject_interaction_assets(staged_dir)
+            return
         if skill_id != "state-system":
             return
 
@@ -272,6 +302,71 @@ class AgentGenerator:
             for source in sorted(self.characters_dir.glob(f"*_stages.{stages_format}")):
                 self._validate_stage_file(source, stages_format)
                 shutil.copy2(source, stages_dir / source.name)
+
+    def _inject_interaction_assets(self, staged_dir: Path) -> None:
+        """把作者维护的声明式交互内容写入 Skill 打包副本。"""
+        assets_dir = staged_dir / "assets"
+        references_dir = staged_dir / "references"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        references_dir.mkdir(parents=True, exist_ok=True)
+
+        self._validate_interaction_sources()
+        for filename in ("actions.yaml", "regions.yaml", "map.svg"):
+            source = self.interaction_dir / filename
+            if source.exists():
+                shutil.copy2(source, assets_dir / filename)
+
+        runtime = {
+            "version": 1,
+            "project_id": self.project_id,
+            "state_file": self.interaction_cfg["state_file"],
+            "extension_fields": "allowed",
+        }
+        (references_dir / "runtime.yaml").write_text(
+            yaml.safe_dump(runtime, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+
+    def _validate_interaction_sources(self) -> None:
+        if not self.interaction_dir.exists():
+            raise FileNotFoundError(
+                "interaction.enabled requires the interaction/ source directory"
+            )
+
+        for filename, root_key in (
+            ("actions.yaml", "actions"),
+            ("regions.yaml", "regions"),
+        ):
+            source = self.interaction_dir / filename
+            if not source.exists():
+                raise FileNotFoundError(f"Missing {source}")
+            try:
+                data = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError as e:
+                raise ValueError(f"Invalid interaction data in {source}: {e}")
+            items = data.get(root_key) if isinstance(data, dict) else None
+            if not isinstance(items, list):
+                raise ValueError(f"{source} must contain a {root_key} list")
+
+            seen = set()
+            for item in items:
+                if not isinstance(item, dict):
+                    raise ValueError(f"Each item in {source} must be a mapping")
+                item_id = item.get("id")
+                label = item.get("label")
+                if not isinstance(item_id, str) or not item_id.strip():
+                    raise ValueError(f"Each item in {source} must have a non-empty id")
+                if item_id in seen:
+                    raise ValueError(f"Duplicate id {item_id!r} in {source}")
+                seen.add(item_id)
+                if not isinstance(label, str) or not label.strip():
+                    raise ValueError(
+                        f"Interaction item {item_id!r} in {source} needs a label"
+                    )
+
+        map_file = self.interaction_dir / "map.svg"
+        if map_file.exists() and "<svg" not in map_file.read_text(encoding="utf-8"):
+            raise ValueError(f"{map_file} must be an SVG text file")
 
     def _validate_stage_file(self, source: Path, stages_format: str) -> None:
         try:
@@ -403,6 +498,13 @@ class AgentGenerator:
             post_history_parts.append(self._build_non_agent_state_instructions())
         post_history = "\n\n".join(part for part in post_history_parts if part)
 
+        extensions = {}
+        if self.build_target == "agent" and self.interaction_cfg["enabled"]:
+            extensions["tauritavern_interaction"] = {
+                "version": 1,
+                "projectId": self.project_id,
+            }
+
         data = {
             "name": narrator.get("name", self.pname),
             "description": description,
@@ -417,19 +519,28 @@ class AgentGenerator:
             "tags": [],
             "creator": creator,
             "character_version": pversion,
-            "extensions": {},
+            "extensions": extensions,
         }
 
         return {"spec": "chara_card_v2", "spec_version": "2.0", "data": data}
 
-    @staticmethod
-    def _build_agent_skill_bridge() -> str:
-        return (
+    def _build_agent_skill_bridge(self) -> str:
+        bridge = (
             "【Agent 状态扩展】\n"
             "每次运行必须先查阅名为 state-system 的 Skill，并按其说明读取当前持久状态与必要的角色阶段资料。"
             "只在当前轮有明确证据时更新状态；没有变化时保持原值。"
             "可按需使用用户的其他可见 Skills 扩展写作流程，但不得覆盖角色卡、已激活世界书或 state-system 的状态契约。"
         )
+        if self.interaction_cfg["enabled"]:
+            bridge += (
+                "\n\n【暂停式交互扩展】\n"
+                "每次运行还要查阅名为 interaction-system 的 Skill。"
+                "把普通用户输入或由界面生成的 [交互行动] 都视为玩家本轮选择；"
+                "完成叙事与状态事务后，更新 persist/interaction-state.yaml，"
+                "为界面提供下一轮可选目标和行动。该 Skill 只定义交互桥接协议，"
+                "不得限制角色卡、世界书或用户其他 Skills 允许的创作空间。"
+            )
+        return bridge
 
     def _build_non_agent_state_instructions(self) -> str:
         if not self.state_cfg["non_agent"]["emit_legacy_updates"]:
@@ -650,6 +761,64 @@ class AgentGenerator:
         print(f"  [OK] agent-overrides.css")
         return str(dst)
 
+    # ── 可选交互扩展 ────────────────────────────────────────
+
+    def copy_interaction_extension(self) -> Optional[str]:
+        """复制通用运行时并写入当前套件的最小配置。"""
+        if not self.interaction_cfg["enabled"]:
+            return None
+
+        source_dir = self.root / "extensions" / "interaction-runtime"
+        if not source_dir.exists():
+            raise FileNotFoundError(f"Missing interaction runtime: {source_dir}")
+
+        extension_id = f"{self.project_id}-interaction"
+        destination = self.output_dir / "extensions" / extension_id
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(source_dir, destination)
+        license_file = self.root / "LICENSE"
+        if license_file.exists():
+            shutil.copy2(license_file, destination / "LICENSE")
+
+        manifest_path = destination / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["display_name"] = f"{self.pname} · 交互界面"
+        manifest["version"] = self.cfg.get("project", {}).get("version", "1.0.0")
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        package_config = {
+            "projectId": self.project_id,
+            "profileId": self.project_id,
+            "skillName": self.interaction_cfg["skill_id"],
+            "stateFile": self.interaction_cfg["state_file"],
+            "cacheNamespace": extension_id,
+        }
+        config_text = (
+            "// Generated by scripts/generate.py.\n"
+            "export default "
+            + json.dumps(package_config, ensure_ascii=False, indent=2)
+            + ";\n"
+        )
+        (destination / "package-config.js").write_text(config_text, encoding="utf-8")
+        print(f"  [OK] extensions/{extension_id}/")
+        return str(destination)
+
+    def prune_disabled_interaction_outputs(self) -> None:
+        """开关关闭后移除上一次 Agent 构建留下的可选交互产物。"""
+        if self.interaction_cfg["enabled"]:
+            return
+        skill_archive = self.output_dir / "skills" / "interaction-system.ttskill"
+        extension_dir = (
+            self.output_dir / "extensions" / f"{self.project_id}-interaction"
+        )
+        if skill_archive.exists():
+            skill_archive.unlink()
+        if extension_dir.exists():
+            shutil.rmtree(extension_dir)
+
     # ── 汇总输出 ──────────────────────────────────────────────
 
     def run(self):
@@ -658,6 +827,7 @@ class AgentGenerator:
         print(f"{'='*60}\n")
 
         if self.build_target == "agent":
+            self.prune_disabled_interaction_outputs()
             print("[验证] SKILLS ...")
             validated = self.validate_skills()
             for v in validated:
@@ -692,6 +862,10 @@ class AgentGenerator:
         print(f"  [OK] {card_path.name}")
 
         if self.build_target == "agent":
+            if self.interaction_cfg["enabled"]:
+                print("\n[生成] 暂停式交互扩展 ...")
+                self.copy_interaction_extension()
+
             print("\n[生成] 主题 ...")
             self.copy_theme()
 
@@ -703,13 +877,19 @@ class AgentGenerator:
         print("导入 TauriTavern")
         print(f"{'='*60}")
         if self.build_target == "agent":
+            interaction_step = ""
+            if self.interaction_cfg["enabled"]:
+                interaction_step = (
+                    f"  5. 按 extensions/{self.project_id}-interaction/README.md "
+                    "安装交互扩展\n"
+                )
             print(f"""
   产物目录：output/agent/
   1. Characters → Import → {self.project_id}.character-card.json
   2. Agent 系统面板 → SKILLS → 逐个导入 skills/*.ttskill
   3. Agent 系统面板 → 配置档案 → 导入 → {self.project_id}.agent-profile.json
   4. 设为 Active Profile，开启 Agent Mode
-""")
+{interaction_step}""")
         else:
             print(f"""
   产物目录：output/non-agent/

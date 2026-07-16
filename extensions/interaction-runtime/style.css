@@ -1,0 +1,183 @@
+.tt-interaction-root {
+  --tti-accent: var(--SmartThemeQuoteColor, #8db7e8);
+  --tti-text: var(--SmartThemeBodyColor, #eef2f7);
+  --tti-border: var(--SmartThemeBorderColor, #667085);
+  --tti-bg: color-mix(in srgb, var(--SmartThemeBlurTintColor, #171b22) 94%, transparent);
+  display: none;
+  color: var(--tti-text);
+}
+
+.tt-interaction-root[data-card-active] {
+  display: block;
+}
+
+.tt-interaction-launcher {
+  position: fixed;
+  z-index: 2998;
+  right: max(16px, var(--tt-inset-right, env(safe-area-inset-right)));
+  bottom: max(76px, calc(var(--tt-inset-bottom, env(safe-area-inset-bottom)) + 64px));
+  min-width: 64px;
+  min-height: 44px;
+  border: 1px solid var(--tti-border);
+  border-radius: 999px;
+  background: var(--tti-bg);
+  color: var(--tti-text);
+  backdrop-filter: blur(var(--SmartThemeBlurStrength, 12px));
+}
+
+.tt-interaction-backdrop,
+.tt-interaction-panel {
+  display: none;
+}
+
+.tt-interaction-root[data-open] .tt-interaction-backdrop {
+  display: block;
+  position: fixed;
+  z-index: 2999;
+  inset: 0;
+  background: rgb(0 0 0 / 0.5);
+}
+
+.tt-interaction-root[data-open] .tt-interaction-panel {
+  display: flex;
+  position: fixed;
+  z-index: 3000;
+  top: max(16px, var(--tt-inset-top, env(safe-area-inset-top)));
+  right: max(16px, var(--tt-inset-right, env(safe-area-inset-right)));
+  bottom: max(16px, var(--tt-inset-bottom, env(safe-area-inset-bottom)));
+  width: min(560px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--tti-border);
+  border-radius: 16px;
+  background: var(--tti-bg);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.42);
+  backdrop-filter: blur(var(--SmartThemeBlurStrength, 16px));
+}
+
+.tt-interaction-header,
+.tt-interaction-controls,
+.tt-interaction-targets,
+.tt-interaction-lore {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tt-interaction-header {
+  justify-content: space-between;
+}
+
+.tt-interaction-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.tt-interaction-panel button {
+  border: 1px solid var(--tti-border);
+  border-radius: 9px;
+  padding: 8px 11px;
+  background: color-mix(in srgb, var(--tti-bg) 85%, var(--tti-text) 15%);
+  color: var(--tti-text);
+  cursor: pointer;
+}
+
+.tt-interaction-panel button:hover,
+.tt-interaction-panel button[data-selected] {
+  border-color: var(--tti-accent);
+}
+
+.tt-interaction-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tt-interaction-status,
+.tt-interaction-summary {
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--tti-bg) 86%, var(--tti-text) 14%);
+}
+
+.tt-interaction-status[data-tone='busy'] {
+  color: var(--tti-accent);
+}
+
+.tt-interaction-status[data-tone='error'] {
+  color: #ff9b93;
+}
+
+.tt-interaction-map {
+  overflow: hidden;
+  min-height: 180px;
+  border: 1px solid var(--tti-border);
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.16);
+}
+
+.tt-interaction-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.tt-interaction-map [data-region-id] {
+  cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.tt-interaction-map [data-region-id]:hover,
+.tt-interaction-map [data-region-id][data-selected] {
+  filter: brightness(1.2);
+  transform: scale(1.03);
+}
+
+.tt-interaction-section h3 {
+  margin: 2px 0 8px;
+  font-size: 0.9rem;
+}
+
+.tt-interaction-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.tt-interaction-action {
+  display: flex;
+  min-height: 64px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+}
+
+.tt-interaction-action span,
+.tt-interaction-empty {
+  font-size: 0.82rem;
+  opacity: 0.72;
+}
+
+@media (max-width: 700px) {
+  .tt-interaction-root[data-open] .tt-interaction-panel {
+    inset: 0;
+    width: auto;
+    padding-top: max(14px, var(--tt-inset-top, env(safe-area-inset-top)));
+    padding-right: max(14px, var(--tt-inset-right, env(safe-area-inset-right)));
+    padding-bottom: max(14px, var(--tt-viewport-bottom-inset, var(--tt-inset-bottom, env(safe-area-inset-bottom))));
+    padding-left: max(14px, var(--tt-inset-left, env(safe-area-inset-left)));
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-interaction-map [data-region-id] {
+    transition: none;
+  }
+}

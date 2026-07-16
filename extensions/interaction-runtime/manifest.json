@@ -1,0 +1,11 @@
+{
+  "display_name": "TauriTavern 暂停式交互界面",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "TauriTavern Agent Template",
+  "version": "1.0.0",
+  "auto_update": false
+}

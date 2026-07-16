@@ -1,6 +1,6 @@
 # TauriTavern Agent 同人小说生成系统
 
-> **Version**: 2.4.0
+> **Version**: 2.5.0
 > **Purpose**: 从同一份创作源数据构建 Agent 或非 Agent 角色卡套件
 
 ---
@@ -28,6 +28,8 @@ Step 4  生成输出 — python scripts/generate.py
 | `{project.id}.agent-profile.json` | Agent 配置档案：继承官方默认运行提示，允许用户的其他 Skills |
 | `skills/state-system.ttskill` | 状态工作流 Skill，导入 Agent 系统面板 SKILLS 页 |
 | `{project.id}.character-card.json` | Agent 目标角色卡，不含 legacy `_.set(...)` 协议 |
+| `skills/interaction-system.ttskill` | 可选暂停式交互协议与声明式地图/行动资源 |
+| `extensions/{project.id}-interaction/` | 可选点击交互扩展，单独安装，不限制普通文字输入 |
 | `agent-overrides.css` | 前端美化，按需导入主题 |
 
 **`build.target: "non_agent"` → `output/non-agent/`**：
@@ -48,7 +50,14 @@ project/
 │   ├── scenarios/                # 场景剧本 .md（含 YAML Frontmatter）
 │   └── fanfic/                   # 风格样本、设定参考原文
 ├── skills/
-│   └── state-system/SKILL.md     # Agent 状态计算与持久化工作流
+│   ├── state-system/SKILL.md     # Agent 状态计算与持久化工作流
+│   └── interaction-system/       # 可选暂停式交互协议
+├── interaction/                  # 作者编辑的地图、区域与基础行动
+├── extensions/
+│   └── interaction-runtime/      # 通用 UI 运行时；不要在这里写剧情规则
+├── examples/
+│   └── hongloumeng/              # 四地点、四角色的最小创作与测试示例
+├── tests/                         # 示例构建和跨文件一致性测试
 ├── theme/
 │   └── agent-overrides.css       # 前端美化（可选）
 ├── scripts/
@@ -124,6 +133,14 @@ dimensions:
 # =============================================================================
 build:
   target: "agent"
+
+# =============================================================================
+# 暂停式点击交互（仅影响 agent 构建）
+# true 时打包 interaction-system 并生成可单独安装的 UI Extension。
+# 具体玩法不写在这里；编辑 interaction/ 与 interaction-system Skill。
+# =============================================================================
+interaction:
+  enabled: true
 
 # =============================================================================
 # 路径配置
@@ -202,6 +219,8 @@ agent:
 skills:
   - id: "state-system"
     source_dir: "skills/state-system"
+  - id: "interaction-system"
+    source_dir: "skills/interaction-system"
 
 # =============================================================================
 # 主题（可选）
@@ -220,6 +239,7 @@ theme:
 2. 编辑第 2 节配置区，替换 `{占位符}`，并为 `project.id` 设置稳定 ASCII 标识
 3. 选择 `build.target`：`agent` 或 `non_agent`
 4. 确定 `stages_format`：`json` 或 `yaml`
+5. Agent 目标需要点击式交互时保留 `interaction.enabled: true`；纯文字套件设为 `false`
 
 ### Step 2: 素材创作
 
@@ -233,6 +253,16 @@ theme:
 **Agent 扩展原则**：Profile 的 `instructions.agentSystemPrompt` 保持 JSON `null`，不复制 TauriTavern 默认的工具调用、commit 和 finish 提示。每轮都要执行的作品规则放在角色卡，按需读取的工作流与资料放在 Skills。这样本套件扩展官方 Agent，而不替代其运行协议。
 
 Profile 的工具清单按 TauriTavern 当前规范使用精确工具名：默认授予当前全部非委派内置工具，只有意排除子 Agent 委派工具；`dice.roll` 由 `agent.enable_dice` 单独开关。这是执行边界，不是对用户 Skills 的白名单。官方增加新工具后，生成器也需同步加入其精确名称。
+
+**暂停式交互**：`interaction.enabled: true` 时，生成器额外打包 `interaction-system` 并输出一个通用 UI Extension。玩家可以点击地图、目标和行动按钮；扩展先写入一条紧凑、可审计的 `[交互行动]` 用户消息，再通过官方 `api.agent.startRunFromLegacyGenerate()` 启动一个前台 Agent 回合。扩展用 `api.agent.subscribe()` 显示真实运行阶段，完成后读取 `persist/interaction-state.yaml` 刷新界面。
+
+交互层只规定最低互操作协议，不规定题材和玩法：
+
+- 编辑 `interaction/actions.yaml` 定义基础行动；Agent 也可以在持久状态中生成当轮行动。
+- 编辑 `interaction/regions.yaml` 与可选 `interaction/map.svg` 定义地点。SVG 可点击元素使用 `data-region-id` 对应区域 ID。
+- `skills/interaction-system/SKILL.md` 定义状态投影规则，允许作者和其他 Skills 在 `extensions` 或未知字段中继续扩展。
+- 普通文字输入始终有效；点击面板是便利入口，不是对玩家表达方式的限制。
+- `api.chat`、`api.worldInfo` 与移动 Layout 契约存在时自动增强；不存在时隐藏相应功能，不影响核心 Agent 回合。
 
 **传统世界书**：将可复用的角色、地点、势力、背景和静态关系存入 TauriTavern / SillyTavern 世界书。它是这类设定的唯一真相来源，并按原有规则动态激活；本模板不会复制整份世界书到 Skill。
 
@@ -251,6 +281,15 @@ Profile 的工具清单按 TauriTavern 当前规范使用精确工具名：默�
 - 生成器会将 `state_system` 配置写入 Skill 的 `references/update-policy.yaml`。
 - 套件作者通过各维度的 `update_rules` 和全局 `custom_rules` 定义自己的状态逻辑，无需修改 Skill 模板。
 - Profile 使用 `skills.visible: ["*"]`；这个项目的 `skills:` 配置只决定打包哪些 `.ttskill`，不会隐藏或禁用用户本地的其他 Skills。
+
+**交互内容** — `interaction/` 与 `skills/interaction-system/SKILL.md`：
+
+- `actions.yaml`、`regions.yaml` 和 `map.svg` 会进入 `interaction-system.ttskill` 的 `assets/`。
+- 交互扩展通过 Host `api.skill.readFile()` 读取这些 UTF-8 资源；地图优先使用 SVG，避免二进制资源读取依赖。
+- `persist/interaction-state.yaml` 是 Agent 权威的 UI 投影；扩展的聊天级缓存只用于快速恢复界面，不替代它。
+- 不要把具体剧情判断写入通用扩展 JavaScript；应放入角色卡、世界书、状态规则或作者自己的 Skills。
+
+仓库内的 `examples/hongloumeng/` 是最小完整示例，同时由 `tests/test_hongloumeng_example.py` 验证地图区域、必要人物、世界书、阶段资料和实际生成产物保持一致。示例不会进入默认项目输出。
 
 **风格样本** — 从原著选取代表段落，原则：
 - 叙事节奏、对话风格、描写手法各选 1 段
@@ -288,7 +327,7 @@ python scripts/generate.py
 
 脚本读取 `build.target` 后只生成对应目标：
 
-- `agent`：Profile + SKILLS + Agent 角色卡 + 主题 CSS。
+- `agent`：Profile + SKILLS + Agent 角色卡 + 可选交互扩展 + 主题 CSS。
 - `non_agent`：状态世界书 + legacy 角色卡。
 
 Agent Profile 中 `agentSystemPrompt` 必须是 `null`，不是空字符串。TauriTavern 会依据实际可用工具和工作区生成默认 Agent 运行提示；本模板不复制这份提示。
@@ -299,6 +338,9 @@ Agent Profile 中 `agentSystemPrompt` 必须是 `null`，不是空字符串。Ta
 2. Agent 系统面板 → SKILLS → 导入 `output/agent/skills/` 下的每一个 `.ttskill`
 3. Agent 系统面板 → 配置档案 → 导入 → `output/agent/{project.id}.agent-profile.json`
 4. 设为 Active Profile，开启 Agent Mode 即可使用
+5. 若启用交互，按 `output/agent/extensions/{project.id}-interaction/README.md` 单独安装 UI Extension
+
+TauriTavern 当前没有公开“随角色卡或 Skill 自动安装第三方 UI Extension”的 API，因此生成器不会绕过用户确认自动安装扩展。发布套件时，建议把生成的扩展目录作为独立 Git 仓库分发；不安装扩展时，角色卡、世界书、Agent Profile 和 Skills 仍可通过普通文字正常使用。
 
 ### 导入非 Agent 目标
 
@@ -320,6 +362,8 @@ Agent Profile 中 `agentSystemPrompt` 必须是 `null`，不是空字符串。Ta
 两种产物的状态存储彼此独立。不应在同一聊天中途直接互换角色卡或状态后端；如果必须迁移已有进度，需要专门的状态转换/同步步骤。
 
 LLM 对自然语言事件的判断不是确定性计算。模板通过以下原则降低数值错误：旧值必须可追溯、只计算当前轮、限制参与角色与单轮增量、执行 `old + delta = new`、限制边界，并在 Agent Mode 写回后重新读取核对。需要绝对确定性的公式、UI 联动或跨会话全局状态时，仍应使用脚本或专用工具。
+
+交互扩展不拥有剧情状态。Agent 成功 `workspace.finish` 后，`persist/` 才会成为下一回合的权威状态；失败或取消时界面保留上一个成功投影，并允许重试。当前公开 API 不支持 rollback、Agent streaming 或稳定 extension tool bridge，因此模板不会伪造撤销、逐 token 流式状态或 Skill 脚本工具。
 
 ### 非 Agent legacy 运行时
 
@@ -368,6 +412,10 @@ description: 简短描述
 | 用户本地其他 Skills 不可见 | 检查生成 Profile 的 `skills.visible` 是否为 `["*"]`，以及 Skill 本身的作用域是否适用于当前运行 |
 | Agent 不提交回复 | 确认 `workspace.commit` 工具已启用 |
 | 状态不更新 | 检查 `state-system` SKILL 是否正确导入，且 Agent 有 `persist/` 读写权限 |
+| 角色卡没有“行动”按钮 | 确认 `interaction.enabled: true`，已安装生成的 UI Extension，并导入 `interaction-system.ttskill` |
+| 点击行动后没有启动 | 确认当前为单角色 chat-completion 路径，Profile ID 与生成套件一致，且 TauriTavern 提供 `api.agent.startRunFromLegacyGenerate` |
+| 地图不能点击 | 检查 `map.svg` 元素的 `data-region-id` 是否与 `regions.yaml` 中的 `id` 一致 |
+| 交互状态没有刷新 | 检查 `persist/interaction-state.yaml` 是否在成功 `workspace.finish` 前被 Agent 写入；失败或取消不会提升持久变更 |
 | Agent 正文出现 `_.set(...)` | 检查导入的是 Agent 目标角色卡，并确认 `state-system` 中的可见输出边界未被其他 Skill 覆盖 |
 | 非 Agent 下看不到阶段资料 | 使用 `non_agent` 构建并导入/绑定生成的 `.state-worldbook.json` |
 | 非 Agent 模式数值未保存 | `_.set(...)` 需要原 SillyTavern 兼容状态脚本执行；未安装时不会自动保存 |
