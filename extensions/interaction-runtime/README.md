@@ -1,9 +1,9 @@
 # 暂停式交互扩展
 
-本说明随通用 UI 运行时一起复制：
+这是一次安装即可服务多个项目的通用 UI 运行时：
 
 - 根目录 `extensions/interaction-runtime/` 是框架源码。
-- `projects/<project-id>/output/agent/extensions/<project-id>-interaction/` 是注入项目配置后的可安装扩展。
+- `projects/<project-id>/output/agent/extensions/tauritavern-interaction/` 是可安装副本。
 
 请只安装生成后的扩展，不要直接安装或修改根目录模板。重新构建会覆盖生成目录。
 
@@ -16,9 +16,9 @@
    ```
 
 2. 将生成的扩展目录复制到 SillyTavern/TauriTavern 扩展目录；发布时也可以把该目录作为独立 Git 仓库安装。
-3. 同时导入项目生成的角色卡、Agent Profile 和 `skills/interaction-system.ttskill`。
+3. 同时导入项目生成的角色卡、Agent Profile 和项目前缀命名的 `skills/*.ttskill`。
 
-只有带有对应 `projectId` 标记的角色卡会显示交互入口。普通文字输入始终可用。
+项目配置由角色卡的 `tauritavern_interaction` 标记提供，不写死在扩展中。多个项目共用同一扩展，切换角色卡时自动切换 Profile、Skill、状态路径与缓存命名空间。普通聊天输入和面板内的自定义行动输入始终可用。
 
 ## 项目自定义
 

@@ -24,7 +24,7 @@ python scripts/generate.py projects/<project-id>
 | `build.target` | 输出目录 | 主要产物 |
 |---|---|---|
 | `agent` | `output/agent/` | 角色卡、Agent Profile、Skills、可选交互扩展 |
-| `non_agent` | `output/non-agent/` | 角色卡、状态世界书 |
+| `non_agent` | `output/non-agent/` | 角色卡、可选状态世界书 |
 
 两种目标的运行时状态互不兼容，不要在同一聊天中直接互换。
 

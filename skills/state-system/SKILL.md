@@ -17,7 +17,7 @@ description: Agent Mode 下角色与剧情状态的读取、数值计算、校�
 
 ## 状态维度
 
-首次需要计算状态时读取；彼此独立的文件应在同一个模型回合并行读取：
+每次运行在首个工具阶段直接读取以下两个短引用；它们与本 SKILL.md、已激活世界书和策略声明的状态文件并行读取，不先调用 `skill.list` / `skill.search`，也不先列 workspace 目录：
 
 1. `references/update-policy.json`：状态文件路径、全局限制和用户自定义规则。
 2. `references/dimensions.json`：维度 ID、范围、初始值、阶段和每维度更新规则。
@@ -39,20 +39,19 @@ description: Agent Mode 下角色与剧情状态的读取、数值计算、校�
   "turn": 12,
   "characters": {
     "角色名": {
-      "affection": 45,
-      "corruption": 12
+      "dimension_id": 45
     }
   },
   "plot": {"flags": {}},
-  "last_update": {"summary": "角色名主动坦白秘密，affection +2"}
+  "last_update": {"summary": "角色名因当前轮事件使 dimension_id +2"}
 }
 ```
 
 ## 初始化
 
-- 每次运行至多调用一次 `workspace.list_files`；它与 `interaction-system` 共用同一次目录结果。只在确认 `persist/character_states.json` 存在后才读取它。不要通过故意读取不存在的文件来判断是否首轮。
+- 每次运行直接读取更新策略声明的状态文件，并与 Skill 固定引用放在首个并行工具阶段；不要先列目录只为确认文件存在。
 - 如果状态文件存在，以文件中的值为唯一旧值来源。
-- 如果状态文件不存在，这是正常的首轮状态，不是运行错误。优先从聊天中的 `<agent_state_init>` JSON 块读取场景初始值；在已准备好交互投影与正文时，将状态文件和其它文件放在同一模型回合并行写入。
+- 如果读取返回 `Not found`，这是正常的首轮状态，不是运行失败；不要重试读取。优先从聊天中的 `<agent_state_init>` JSON 块读取场景初始值；在已准备好交互投影与正文时，将状态文件和其它文件放在同一模型回合并行写入。
 - 某维度没有场景初始值时，使用 `dimensions.json` 中该维度的 `initial`。
 - 不得从角色语气、阶段描述或历史印象反推一个未经记录的旧值。
 - 路径必须使用更新策略中的精确值；默认文件名是 `character_states.json`，不是 `.josn`。
@@ -61,7 +60,7 @@ description: Agent Mode 下角色与剧情状态的读取、数值计算、校�
 
 严格按以下顺序执行：
 
-1. **读取**：并行读取状态文件、更新策略和维度定义。只有本轮确有数值变化时才读取相关角色阶段资料。
+1. **读取**：首个工具阶段并行读取状态文件、更新策略和维度定义；状态文件 `Not found` 时直接初始化。只有本轮确有数值变化时才读取相关角色阶段资料。
 2. **取证**：只检查当前一轮新发生的台词、动作、选择和明确剧情事件，不重复计算历史。
 3. **提出变更**：内部为每项变化形成 `character / dimension / old / delta / new / evidence`。
 4. **逐项校验**：

@@ -11,11 +11,11 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 - 本次运行的隐式 prompt 包含 `<tt_interaction_input>` 时。
 - 回复完成前需要刷新地点、目标或下一轮行动时。
 
-本 Skill 是角色卡套件的可选交互桥梁，不定义题材、胜负条件、资源体系或固定玩法。角色卡决定文学与扮演方式，已激活世界书决定人物和世界事实，`state-system` 决定角色数值事务，用户的其他可见 Skills 仍可继续扩展工作流。
+本 Skill 是角色卡套件的可选交互桥梁，不定义题材、胜负条件、资源体系或固定玩法。角色卡决定文学与扮演方式，已激活世界书决定人物和世界事实；只有 `references/runtime.json` 中 `state.enabled=true` 时才同时执行 `state-system` 的角色数值事务。用户的其他可见 Skills 仍可继续扩展工作流。
 
 ## 读取内容
 
-1. `references/runtime.json`：当前套件 ID 和交互状态文件路径；启用交互时必须读取。
+1. `references/runtime.json`：当前套件 ID、交互状态文件路径和可选角色状态配置；启用交互时必须读取。
 2. `assets/actions.json`：作者提供的基础行动；只在需要核对未知行动、生成回退行动或缺少标签时读取。
 3. `assets/regions.json`：作者提供的地点/区域；只在需要核对未知地点、生成初始目标或缺少标签时读取。
 4. `assets/map.svg`：可选界面地图。模型通常无需读取 SVG 内容。
@@ -28,9 +28,15 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 <tt_interaction_input version="1">{"action":{"id":"observe","label":"观察"},"target":{"type":"region","id":"start","label":"起始地点"}}</tt_interaction_input>
 ```
 
+面板的自由输入使用同一协议，并增加 `custom_input`；这是玩家本轮行动原文，不需要拿 `custom` ID 查询基础行动表：
+
+```text
+<tt_interaction_input version="1">{"action":{"id":"custom","label":"自定义行动"},"target":null,"custom_input":"打开窗户查看街道"}</tt_interaction_input>
+```
+
 只执行本次 prompt 中最后一个 `<tt_interaction_input>`。聊天历史中若存在旧版 `[交互行动]`，它表示已经发生的历史行动，不得在本轮重放。不得在 Agent 过程叙述、`output/main.md` 或聊天正文中引用、转录或解释控制标签与 JSON。
 
-扩展产生的标签已经按当前 `actions.json` 与 `regions.json` 校验，并同时携带 ID 和 label。此时直接采用标签内容，不要再次读取两个资源文件；只有标签字段缺失、ID 未知或需要生成回退列表时才读取对应资源。
+扩展产生的预设标签已经按当前 `actions.json` 与 `regions.json` 校验，并同时携带 ID 和 label。此时直接采用标签内容，不要再次读取两个资源文件；`action.id=custom` 时直接执行 `custom_input`，也不读取基础行动表。只有其它标签字段缺失、ID 未知或需要生成回退列表时才读取对应资源。
 
 ## 权威状态与界面投影
 
@@ -55,7 +61,7 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 - `extensions` 是套件作者的扩展空间。可以加入地图状态、资源、旗标、任务或自定义面板数据。
 - 对未知字段应尽量原样保留，避免阻止其他 Skill 或未来版本扩展。
 
-界面会直接从权威 `persist/character_states.json` 读取角色数值，并结合 `state-system` 的维度定义显示只读进度条，不要把同一角色数值重复复制到交互投影。其它需要展示的简报可写入 `extensions.briefing`：数值自动显示为进度条，文字、布尔和数组显示为文本。本模板当前不允许界面直接编辑这些值。
+当 `runtime.json.state.enabled=true` 时，界面会从其中声明的权威角色状态文件读取数值，并结合指定状态 Skill 的维度定义显示只读进度条；不要把同一角色数值重复复制到交互投影。没有角色状态维度时跳过这一步。其它需要展示的简报可写入 `extensions.briefing`：数值自动显示为进度条，文字、布尔和数组显示为文本。本模板当前不允许界面直接编辑这些值。
 
 ```json
 {
@@ -90,10 +96,10 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 
 ## 回合事务
 
-1. 与 `state-system` 共用同一次 `workspace.list_files` 结果；每次运行不得重复列目录。只在确认 `persist/interaction-state.json` 存在后才读取它。文件不存在是正常首轮，应用场景、世界书和当前输入立即建立最小状态，不要将 `Not found` 当作任务失败。
+1. 每次运行在首个并行工具阶段直接读取 `persist/interaction-state.json`；启用角色状态时同时读取其权威状态文件。不要先列 workspace 目录只为确认文件存在。`Not found` 是正常首轮，不重试读取，直接应用场景、世界书和当前输入建立最小状态。
 2. 读取玩家本轮普通输入或本次运行最后一个 `<tt_interaction_input>`，核对行动 ID 与当前目标；动态 `actions` 中的行动同样有效。
 3. 按角色卡、已激活世界书、状态规则和其它可见 Skills 生成叙事。
-4. 完成 `state-system` 要求的角色状态事务。
+4. 仅当 `runtime.json.state.enabled=true` 时，完成其中指定 `state-system` 要求的角色状态事务。
 5. 把已经发生的结果投影到交互状态：递增 `turn`，更新简短 `summary`、当前位置、目标、下一轮可用行动和作者定义的可选 `extensions.briefing`。与角色状态和 `output/main.md` 在同一模型回合并行写入。
 6. 写入前在内存中核对 JSON；只有写入报错或无法确认合并结果时才回读，禁止无条件回读刚写入的文件。
 7. 下一模型回合立即调用 `workspace.commit` 发布 `output/main.md`，再调用 `workspace.finish`。交互扩展使用后台 presentation 隐藏 Agent 中间过程，但“后台可以无 commit 结束”不适用于本交互回合；每轮仍必须发布剧情正文。
@@ -102,10 +108,10 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 
 一次正常点击回合应按以下四个工具阶段完成，独立调用全部并行：
 
-1. 列出 Skills、读取已激活世界书、列出 workspace。
-2. 读取两个 Skill 根文件及本轮确实需要的最少引用；已完整提供的点击标签不读取 actions/regions。
-3. 并行写入必要的持久状态、交互投影和 `output/main.md`；无数值变化时不重写角色状态。
-4. `workspace.commit`，随后 `workspace.finish`。
+1. 直接读取角色卡指定的交互 Skill 根文件、固定短引用、交互状态文件与已激活世界书；若启用角色状态，同时读取指定状态 Skill、短引用及权威状态文件。全部并行，不先 list/search Skill 或列目录；状态文件 `Not found` 时直接初始化。已完整提供的点击标签不读取 actions/regions。
+2. 并行写入必要的持久状态、交互投影和 `output/main.md`；无数值变化时不重写角色状态。
+3. `workspace.commit`。
+4. `workspace.finish`。
 
 不得用普通 assistant 文本汇报内部进度。接近回合上限时，停止可选读取和校对：保持不确定的数值不变，完成交互投影、正文发布和 finish。
 

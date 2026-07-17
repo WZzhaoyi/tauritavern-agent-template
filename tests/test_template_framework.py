@@ -1,6 +1,8 @@
+import json
 import shutil
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from scripts.check_release import validate_release_tag
@@ -114,6 +116,92 @@ class TemplateFrameworkTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("hongloumeng", runtime.lower())
         self.assertNotIn("红楼梦", runtime)
+
+    def test_neutral_template_does_not_assume_perspective_or_state(self):
+        with tempfile.TemporaryDirectory(prefix="tauritavern-neutral-") as tmp:
+            project = Path(tmp)
+            shutil.copy2(
+                REPO_ROOT / "tauritavern.template.yaml",
+                project / "tauritavern.yaml",
+            )
+            generator = AgentGenerator(str(project), str(REPO_ROOT))
+            config = ConfigLoader.load(project)
+
+            self.assertEqual([], config["dimensions"])
+            self.assertNotIn("第三人称", config["narrator"]["persona"])
+            self.assertNotIn("叙事者", config["narrator"]["persona"])
+
+            generator.run()
+            output = project / "output" / "agent"
+            self.assertEqual([], list((output / "skills").glob("*.ttskill")))
+            profile = json.loads(
+                (output / "my-card-writer.agent-profile.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(8, profile["tools"]["maxRounds"])
+            self.assertEqual(20, profile["tools"]["maxCallsPerRun"])
+
+    def test_interaction_can_run_without_character_dimensions(self):
+        with tempfile.TemporaryDirectory(prefix="tauritavern-stateless-ui-") as tmp:
+            project = Path(tmp)
+            config = (REPO_ROOT / "tauritavern.template.yaml").read_text(
+                encoding="utf-8"
+            ).replace("enabled: false", "enabled: true", 1)
+            (project / "tauritavern.yaml").write_text(config, encoding="utf-8")
+            interaction = project / "interaction"
+            interaction.mkdir()
+            (interaction / "actions.json").write_text(
+                '{"actions":[{"id":"continue","label":"继续"}]}',
+                encoding="utf-8",
+            )
+            (interaction / "regions.json").write_text(
+                '{"regions":[{"id":"start","label":"起点"}]}',
+                encoding="utf-8",
+            )
+
+            AgentGenerator(str(project), str(REPO_ROOT)).run()
+            output = project / "output" / "agent"
+            archives = sorted(path.name for path in (output / "skills").glob("*.ttskill"))
+            self.assertEqual(
+                ["my-card-writer-interaction-system.ttskill"], archives
+            )
+            with zipfile.ZipFile(output / "skills" / archives[0]) as package:
+                runtime = json.loads(package.read("references/runtime.json"))
+                self.assertFalse(runtime["state"]["enabled"])
+                self.assertIsNone(runtime["state"]["skill_name"])
+
+            card = json.loads(
+                (output / "my-card-writer.character-card.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            marker = card["data"]["extensions"]["tauritavern_interaction"]
+            self.assertIsNone(marker["stateSkillName"])
+            self.assertIsNone(marker["characterStateFile"])
+
+    def test_stateless_non_agent_build_omits_state_worldbook(self):
+        with tempfile.TemporaryDirectory(prefix="tauritavern-stateless-legacy-") as tmp:
+            project = Path(tmp)
+            config = (REPO_ROOT / "tauritavern.template.yaml").read_text(
+                encoding="utf-8"
+            ).replace('target: "agent"', 'target: "non_agent"', 1)
+            (project / "tauritavern.yaml").write_text(config, encoding="utf-8")
+
+            AgentGenerator(str(project), str(REPO_ROOT)).run()
+            output = project / "output" / "non-agent"
+            self.assertFalse(
+                (output / "my-card-writer.state-worldbook.json").exists()
+            )
+            card = json.loads(
+                (output / "my-card-writer.character-card.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertNotIn(
+                "状态更新：非 Agent",
+                card["data"]["post_history_instructions"],
+            )
 
 
 if __name__ == "__main__":

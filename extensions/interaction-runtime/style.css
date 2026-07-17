@@ -388,6 +388,30 @@
   font-size: 0.82rem;
 }
 
+.tt-interaction-custom-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tt-interaction-custom-input {
+  box-sizing: border-box;
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid var(--tti-border);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: var(--tti-card);
+  color: var(--tti-text);
+  font: inherit;
+}
+
+.tt-interaction-custom-input:focus {
+  outline: 1px solid var(--tti-accent);
+  border-color: var(--tti-accent);
+}
+
 @keyframes tti-pulse {
   0%, 100% { opacity: 0.35; transform: scale(0.85); }
   50% { opacity: 1; transform: scale(1.08); }
@@ -478,6 +502,10 @@
   }
 
   .tt-interaction-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .tt-interaction-custom-action {
     grid-template-columns: 1fr;
   }
 }

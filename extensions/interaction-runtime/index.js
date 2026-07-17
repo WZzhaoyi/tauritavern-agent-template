@@ -1,6 +1,4 @@
-import config from './package-config.js';
-
-const ROOT_ID = `tt-interaction-${config.projectId}`;
+const ROOT_ID = 'tt-interaction-runtime';
 const CACHE_KEYS = ['interaction-state', 'character-state', 'narrative'];
 const TERMINAL_EVENTS = new Set(['run_completed', 'run_failed', 'run_cancelled', 'run_partial_success']);
 const PROGRESS_LABELS = {
@@ -41,6 +39,7 @@ const runtime = {
   runCommitted: false,
   runStartedAt: null,
   progressTimer: null,
+  projectConfig: null,
   statusMessage: '尚未载入',
   statusTone: 'idle'
 };
@@ -80,11 +79,28 @@ function formatRunFailure(event) {
 }
 
 function activeCardMatches() {
+  return Boolean(activeCardConfig());
+}
+
+function activeCardConfig() {
   const context = stContext();
-  if (!context || context.groupId || context.characterId === undefined) return false;
+  if (!context || context.groupId || context.characterId === undefined) return null;
   const card = context.characters?.[context.characterId];
   const marker = card?.data?.extensions?.tauritavern_interaction;
-  return marker?.projectId === config.projectId;
+  if (
+    !marker?.projectId
+    || !marker?.profileId
+    || !marker?.skillName
+    || !marker?.stateFile
+    || !marker?.narrativeFile
+    || !marker?.cacheNamespace
+  ) return null;
+  return marker;
+}
+
+function projectConfig() {
+  if (!runtime.projectConfig) throw new Error('当前角色卡缺少交互项目配置');
+  return runtime.projectConfig;
 }
 
 function element(tag, className, text) {
@@ -108,6 +124,8 @@ function getUi() {
     briefing: root?.querySelector('[data-role="briefing"]'),
     targets: root?.querySelector('[data-role="targets"]'),
     actions: root?.querySelector('[data-role="actions"]'),
+    customInput: root?.querySelector('[data-role="custom-input"]'),
+    customSubmit: root?.querySelector('[data-role="custom-submit"]'),
     lore: root?.querySelector('[data-role="lore"]'),
     cancel: root?.querySelector('[data-role="cancel"]'),
     retry: root?.querySelector('[data-role="retry"]')
@@ -176,8 +194,8 @@ function setBusy(busy) {
   const { root, cancel, launcher } = getUi();
   root?.toggleAttribute('data-busy', busy);
   launcher?.toggleAttribute('data-busy', busy);
-  root?.querySelectorAll('[data-action-id]').forEach(button => {
-    button.disabled = busy;
+  root?.querySelectorAll('[data-run-input]').forEach(control => {
+    control.disabled = busy;
   });
   if (cancel) cancel.hidden = !busy;
   if (busy) startProgressTimer();
@@ -213,7 +231,7 @@ function createUi() {
   const brand = element('div', 'tt-interaction-brand');
   brand.append(
     element('span', 'tt-interaction-kicker', '暂停式回合'),
-    element('div', 'tt-interaction-title', config.projectName || '地图与行动')
+    element('div', 'tt-interaction-title', '地图与行动')
   );
   const controls = element('div', 'tt-interaction-controls');
   const retry = element('button', '', '重试回合');
@@ -268,7 +286,20 @@ function createUi() {
   actionSection.append(element('h3', '', '行动'));
   const actions = element('div', 'tt-interaction-actions');
   actions.dataset.role = 'actions';
-  actionSection.append(actions);
+  const customAction = element('div', 'tt-interaction-custom-action');
+  const customInput = element('textarea', 'tt-interaction-custom-input');
+  customInput.dataset.role = 'custom-input';
+  customInput.dataset.runInput = 'true';
+  customInput.rows = 2;
+  customInput.maxLength = 2000;
+  customInput.placeholder = '输入选项之外的行动…';
+  customInput.setAttribute('aria-label', '自定义行动');
+  const customSubmit = element('button', 'tt-interaction-custom-submit', '执行自定义行动');
+  customSubmit.type = 'button';
+  customSubmit.dataset.role = 'custom-submit';
+  customSubmit.dataset.runInput = 'true';
+  customAction.append(customInput, customSubmit);
+  actionSection.append(actions, customAction);
 
   const loreSection = element('section', 'tt-interaction-section tt-interaction-lore-section');
   loreSection.append(element('h3', '', '本轮设定'));
@@ -294,6 +325,13 @@ function createUi() {
   retry.addEventListener('click', () => startRun(false));
   narrativeTab.addEventListener('click', () => setStageView('narrative'));
   mapTab.addEventListener('click', () => setStageView('map'));
+  customSubmit.addEventListener('click', submitCustomAction);
+  customInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      void submitCustomAction();
+    }
+  });
 
   refreshVisibility();
   syncPresentationMode();
@@ -314,15 +352,24 @@ async function togglePanel(force) {
 function refreshVisibility() {
   const { root } = getUi();
   if (!root) return;
-  const visible = activeCardMatches();
+  const nextConfig = activeCardConfig();
+  const projectChanged = nextConfig?.projectId !== runtime.projectConfig?.projectId;
+  if (projectChanged && !runtime.busy) {
+    runtime.projectConfig = nextConfig;
+  } else if (!nextConfig && !runtime.busy) {
+    runtime.projectConfig = null;
+  }
+  const visible = Boolean(nextConfig) && (!runtime.busy || !projectChanged);
   root.toggleAttribute('data-card-active', visible);
+  const title = root.querySelector('.tt-interaction-title');
+  if (title) title.textContent = nextConfig?.projectName || '地图与行动';
   if (!visible) {
     runtime.opened = false;
     root.removeAttribute('data-open');
   }
 }
 
-async function readSkillText(path, optional = false, skillName = config.skillName) {
+async function readSkillText(path, optional = false, skillName = projectConfig().skillName) {
   const skillApi = ttApi()?.skill;
   if (!skillApi?.readFile) {
     throw new Error('当前 TauriTavern 未提供 Skill Host API');
@@ -343,7 +390,9 @@ async function loadInterface() {
       readSkillText('assets/actions.json'),
       readSkillText('assets/regions.json'),
       readSkillText('assets/map.svg', true),
-      readSkillText('references/dimensions.json', true, config.stateSkillName)
+      projectConfig().stateSkillName
+        ? readSkillText('references/dimensions.json', true, projectConfig().stateSkillName)
+        : Promise.resolve(null)
     ]);
     runtime.baseActions = parseJson(actionsText, 'assets/actions.json').actions ?? [];
     runtime.regions = parseJson(regionsText, 'assets/regions.json').regions ?? [];
@@ -583,6 +632,7 @@ function renderState() {
     const button = element('button', 'tt-interaction-action');
     button.type = 'button';
     button.dataset.actionId = action.id;
+    button.dataset.runInput = 'true';
     button.append(element('strong', '', action.label));
     if (action.description) button.append(element('span', '', action.description));
     button.disabled = runtime.busy || Boolean(action.disabled);
@@ -624,7 +674,31 @@ async function submitAction(action) {
       : null
   };
   const targetLabel = record.target?.label ? ` · ${record.target.label}` : '';
-  runtime.pendingActionLabel = `${record.action.label}${targetLabel}`;
+  await queueAction(record, `${record.action.label}${targetLabel}`);
+}
+
+async function submitCustomAction() {
+  const { customInput } = getUi();
+  const input = customInput?.value.trim();
+  if (runtime.busy || !input) return;
+  const record = {
+    action: { id: 'custom', label: '自定义行动' },
+    target: runtime.selectedTarget
+      ? {
+          type: runtime.selectedTarget.type,
+          id: runtime.selectedTarget.id,
+          label: runtime.selectedTarget.label
+        }
+      : null,
+    custom_input: input
+  };
+  const targetLabel = record.target?.label ? ` · ${record.target.label}` : '';
+  if (customInput) customInput.value = '';
+  await queueAction(record, `自定义行动${targetLabel}`);
+}
+
+async function queueAction(record, label) {
+  runtime.pendingActionLabel = label;
   runtime.lastActionRecord = [
     '以下内容是交互界面为本次 Agent 运行提供的私有控制输入。',
     '只执行其中最后一个 tt_interaction_input；聊天历史中的旧版 [交互行动] 已经发生，不得重放。',
@@ -653,9 +727,9 @@ async function startRun(writeAction) {
     runtime.unsubscribe?.();
     runtime.unsubscribe = null;
     if (writeAction && agent.profiles?.load) {
-      const loaded = await agent.profiles.load({ profileId: config.profileId });
+      const loaded = await agent.profiles.load({ profileId: projectConfig().profileId });
       if (!loaded?.profile) {
-        throw new Error(`未安装 Agent Profile：${config.profileId}`);
+        throw new Error(`未安装 Agent Profile：${projectConfig().profileId}`);
       }
     }
     runtime.runChatToken = currentChatToken();
@@ -666,7 +740,7 @@ async function startRun(writeAction) {
         quiet_prompt: runtime.lastActionRecord,
         quietToLoud: true
       },
-      profileId: config.profileId,
+      profileId: projectConfig().profileId,
       presentation: 'background',
       options: { presentation: 'background', stream: false }
     });
@@ -755,6 +829,7 @@ async function handleRunEvent(event) {
   }
   runtime.runStartedAt = null;
   runtime.runStore = null;
+  refreshVisibility();
 }
 
 async function cancelRun() {
@@ -770,8 +845,9 @@ async function cancelRun() {
 async function refreshStateFromRun(runId, render, cacheStore) {
   if (!runId) return;
   try {
-    const file = await ttApi().agent.readWorkspaceFile({ runId, path: config.stateFile });
-    const state = parseJson(file.text, config.stateFile);
+    const stateFile = projectConfig().stateFile;
+    const file = await ttApi().agent.readWorkspaceFile({ runId, path: stateFile });
+    const state = parseJson(file.text, stateFile);
     await writeCachedValue('interaction-state', { runId, sha256: file.sha256, state }, cacheStore);
     if (render) {
       runtime.state = state;
@@ -784,10 +860,11 @@ async function refreshStateFromRun(runId, render, cacheStore) {
 }
 
 async function refreshCharacterStateFromRun(runId, render, cacheStore) {
-  if (!runId || !config.characterStateFile) return;
+  const characterStateFile = projectConfig().characterStateFile;
+  if (!runId || !characterStateFile) return;
   try {
-    const file = await ttApi().agent.readWorkspaceFile({ runId, path: config.characterStateFile });
-    const state = parseJson(file.text, config.characterStateFile);
+    const file = await ttApi().agent.readWorkspaceFile({ runId, path: characterStateFile });
+    const state = parseJson(file.text, characterStateFile);
     await writeCachedValue('character-state', { runId, sha256: file.sha256, state }, cacheStore);
     if (render) {
       runtime.characterState = state;
@@ -800,9 +877,10 @@ async function refreshCharacterStateFromRun(runId, render, cacheStore) {
 }
 
 async function refreshNarrativeFromRun(runId, render, cacheStore) {
-  if (!runId || !config.narrativeFile) return;
+  const narrativeFile = projectConfig().narrativeFile;
+  if (!runId || !narrativeFile) return;
   try {
-    const file = await ttApi().agent.readWorkspaceFile({ runId, path: config.narrativeFile });
+    const file = await ttApi().agent.readWorkspaceFile({ runId, path: narrativeFile });
     await writeCachedValue(
       'narrative',
       { runId, sha256: file.sha256, text: file.text },
@@ -831,11 +909,12 @@ async function loadCachedState() {
   const store = await chatStore();
   if (!store?.listKeys || !store?.getJson) return;
   try {
-    const keys = await store.listKeys({ namespace: config.cacheNamespace });
+    const namespace = projectConfig().cacheNamespace;
+    const keys = await store.listKeys({ namespace });
     const available = CACHE_KEYS.filter(key => keys.includes(key));
     const entries = await Promise.all(available.map(async key => [
       key,
-      await store.getJson({ namespace: config.cacheNamespace, key })
+      await store.getJson({ namespace, key })
     ]));
     const cached = Object.fromEntries(entries);
     if (cached['interaction-state']?.state) runtime.state = cached['interaction-state'].state;
@@ -848,7 +927,8 @@ async function loadCachedState() {
 }
 
 async function hydrateFromLatestRun() {
-  if (runtime.narrative && runtime.characterState && runtime.state) return;
+  const needsCharacterState = Boolean(projectConfig().characterStateFile);
+  if (runtime.narrative && runtime.state && (!needsCharacterState || runtime.characterState)) return;
   const agent = ttApi()?.agent;
   const chat = ttApi()?.chat;
   if (!agent?.listRuns || !chat?.current?.ref || !chat?.current?.handle) return;
@@ -883,7 +963,7 @@ async function writeCachedValue(key, value, storeOverride = null) {
   if (!store?.setJson) return;
   try {
     await store.setJson({
-      namespace: config.cacheNamespace,
+      namespace: projectConfig().cacheNamespace,
       key,
       value
     });

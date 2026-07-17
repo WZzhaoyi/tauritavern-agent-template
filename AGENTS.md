@@ -61,7 +61,7 @@ projects/<project-id>/         项目维护
 
 角色卡配置：
 
-- `narrator.persona`：稳定的叙事身份、视角和扮演原则。
+- `narrator.persona`：稳定的创作身份与执行原则；只在具体作品需要时定义叙事视角。
 - `narrator.style_instructions`：每轮直接执行的简短文风要求。
 - `style_sample.source_file`：可选风格样本，长度受 `max_length` 限制。
 
@@ -71,14 +71,14 @@ projects/<project-id>/         项目维护
 - 由 TauriTavern / SillyTavern 管理激活规则。
 - 不要把整份世界书复制进 Skill。
 
-状态阶段文件使用 `literature/characters/{角色名}_stages.json`：
+不需要数值状态时保持 `dimensions: []`；Agent 构建会跳过 `state-system`。需要状态时，阶段文件使用 `literature/characters/{角色名}_stages.json`：
 
 ```json
 {
   "character_states": [
     {
-      "id": "affection",
-      "name": "好感度",
+      "id": "dimension-id",
+      "name": "维度名称",
       "ranges": [
         {"min": 0, "max": 25, "content": "阶段描述"},
         {"min": 26, "max": 50, "content": "阶段描述"}
@@ -102,18 +102,15 @@ projects/<project-id>/         项目维护
 ---
 name: 场景名称
 description: 一句话描述
-pov: 第三人称视角
-variables:
-  角色A:
-    affection: 20
 ---
 [前情提要]
 
 [场景正文，结尾留下待回应的钩子]
 ```
 
-- `variables` 的键使用 dimension ID。
-- Agent 构建生成 `<agent_state_init>`。
+- `pov` 和 `variables` 都是可选元数据，不写时不假定视角或初始变量。
+- 使用 `variables` 时，其键必须是已声明的 dimension ID。
+- Agent 构建把 `<agent_state_init>` 放入默认折叠的 `<details>`。
 - 非 Agent 构建生成 legacy 初始化块。
 - 不替玩家决定内心、身份或最终选择。
 
@@ -136,16 +133,16 @@ python scripts/generate.py projects/<project-id>
 | 目标 | 输出 |
 |---|---|
 | `agent` | `output/agent/`：角色卡、Profile、Skills、可选扩展、主题和世界书 |
-| `non_agent` | `output/non-agent/`：角色卡和状态世界书 |
+| `non_agent` | `output/non-agent/`：角色卡和可选状态世界书 |
 
 ## 运行约定
 
 ### Agent
 
-- 导入角色卡、全部随项目打包的 `.ttskill` 和 Agent Profile。
+- 导入角色卡、全部随项目打包的 `.ttskill` 和 Agent Profile；Skill 安装名为 `<project-id>-<skill-id>`，不同项目可共存。
 - Profile 必须启用 workspace 提交工具；骰子由 `agent.enable_dice` 控制。
-- 每轮读取 `state-system`，只更新有当前轮证据的角色和维度。
-- 状态保存到 `persist/character_states.json`。
+- 声明状态维度时，每轮读取项目专属 `state-system`，只更新有当前轮证据的角色和维度；`dimensions: []` 时跳过。
+- 启用角色状态时保存到 `persist/character_states.json`。
 - 启用交互时，同时维护 `persist/interaction-state.json` 和 `output/main.md`。
 - 首轮持久文件不存在是正常情况，应创建而不是报错。
 - 没有数值变化时不重写状态；证据不足时保持原值。
@@ -199,9 +196,9 @@ node --check extensions/interaction-runtime/index.js
 |---|---|
 | 找不到配置 | 项目根目录是否存在 `tauritavern.yaml` |
 | 框架版本不匹配 | 检查迁移后更新项目 `framework.version` |
-| Agent 不读状态 Skill | 是否导入最新 `state-system.ttskill` |
+| Agent 不读状态 Skill | 是否导入最新的 `<project-id>-state-system.ttskill` |
 | Agent 不发布正文 | Profile 是否启用 workspace commit |
-| 点击行动无效 | 是否安装生成扩展并导入 `interaction-system.ttskill` |
+| 点击行动无效 | 是否安装通用生成扩展并导入 `<project-id>-interaction-system.ttskill` |
 | 地图不能点击 | SVG `data-region-id` 是否匹配 `regions.json` |
 | 非 Agent 状态不保存 | 是否安装 legacy 状态运行时 |
 | 世界书未生效 | 检查关键词、递归、绑定和激活状态 |
