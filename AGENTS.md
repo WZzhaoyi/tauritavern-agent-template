@@ -1,6 +1,6 @@
 # TauriTavern Agent 同人小说生成系统
 
-> **Version**: 2.6.0
+> **Version**: 2.7.0
 > **Purpose**: 从同一份创作源数据构建 Agent 或非 Agent 角色卡套件
 
 ---
@@ -10,13 +10,13 @@
 ### 1.1 工作流（4 步）
 
 ```
-Step 1  配置与规划 — 编辑本文件第 2 节配置区
+Step 1  配置与规划 — 编辑项目目录中的 tauritavern.yaml
   ↓
 Step 2  素材创作 — 角色卡文学指南 + 世界书设定 + 状态阶段资料
   ↓
 Step 3  场景创作 — 首条消息和备选开场
   ↓
-Step 4  生成输出 — python scripts/generate.py
+Step 4  生成输出 — python scripts/generate.py projects/<project-id>
 ```
 
 `build.target` 是构建开关。一次构建只产生一种运行目标，不要将同一张角色卡视为两种模式的通用产物。
@@ -44,7 +44,8 @@ Step 4  生成输出 — python scripts/generate.py
 
 ```
 project/
-├── AGENTS.md                     # 本指南与配置中心
+├── AGENTS.md                     # 项目维护与创作指南，不承载机器配置
+├── tauritavern.template.yaml     # 新项目配置模板，不是可直接构建的根配置
 ├── CLAUDE.md                     # 项目入口
 ├── literature/
 │   ├── characters/               # 状态阶段数据 _stages.json
@@ -57,9 +58,9 @@ project/
 ├── lorebooks/                    # 可选；项目维护的传统世界书 JSON
 ├── extensions/
 │   └── interaction-runtime/      # 通用 UI 运行时；不要在这里写剧情规则
-├── examples/
-│   └── hongloumeng/              # 四地点、四角色的最小创作与测试示例
-├── tests/                         # 示例构建和跨文件一致性测试
+├── projects/
+│   └── hongloumeng/              # 四地点、四角色的最小具体项目
+├── tests/                         # 项目构建和跨文件一致性测试
 ├── theme/
 │   └── agent-overrides.css       # 前端美化（可选）
 ├── scripts/
@@ -80,150 +81,18 @@ project/
 
 ---
 
-## 2. 配置区
+## 2. 项目配置
 
-> 只改值，不改键名；缩进 2 空格；冒号后必须有空格；stages 数量 = ranges 长度 − 1。
+项目构建配置位于 `projects/<project-id>/tauritavern.yaml`。根目录的 `tauritavern.template.yaml` 只提供新项目配置模板，不会被生成器当作当前项目配置。`AGENTS.md` 只维护项目指南，不作为机器配置来源。
 
-```yaml
-# =============================================================================
-# 作品元数据
-# =============================================================================
-project:
-  # 稳定 ASCII 标识：用于 Profile ID 与导出文件名，不能使用中文或空格
-  id: "my-card-writer"
-  name: "{作品名}"
-  version: "1.0.0"
-  description: "{一句话描述}"
+编辑配置时遵守以下约束：
 
-# =============================================================================
-# 状态维度定义
-# ranges 定义阶段边界，stages 按从高到低排列（最后=最低范围）
-# =============================================================================
-dimensions:
-  - id: "affection"
-    name: "{维度1名称}"
-    description: "{维度1描述}"
-    ranges: [0, 25, 50, 75, 100]
-    initial: 0
-    legacy_key: "{维度1名称}"  # 非 Agent _.set 路径使用；应与原世界书状态变量名一致
-    update_rules: |
-      日常正向互动 +1~2；明确建立信任或关系突破 +3~5；冲突或背叛 -1~5。
-      重复既有态度、仅在背景中出现或没有当前轮证据时不变。
-    stages:
-      - "{阶段4}"    # 76-100
-      - "{阶段3}"    # 51-75
-      - "{阶段2}"    # 26-50
-      - "{阶段1}"    # 0-25
+- 只改值，不改键名；缩进 2 空格；冒号后必须有空格。
+- `schema_version` 是配置格式版本；当前只支持 `1`。
+- `framework.version` 记录项目采用的构建框架版本，与 `project.version` 分开维护。
+- `dimensions[].stages` 数量必须等于 `ranges` 长度减一。
 
-  - id: "corruption"
-    name: "{维度2名称}"
-    description: "{维度2描述}"
-    ranges: [0, 30, 60, 100]
-    initial: 0
-    legacy_key: "{维度2名称}"
-    update_rules: |
-      {在这里定义本维度增加、减少和保持不变的触发条件，以及不同事件对应的增量。}
-    stages:
-      - "{阶段3}"    # 61-100
-      - "{阶段2}"    # 31-60
-      - "{阶段1}"    # 0-30
-
-# =============================================================================
-# 构建目标开关：agent 或 non_agent
-# 修改后重新运行 generate.py；两种目标分别输出到独立目录。
-# =============================================================================
-build:
-  target: "agent"
-
-# =============================================================================
-# 暂停式点击交互（仅影响 agent 构建）
-# true 时打包 interaction-system 并生成可单独安装的 UI Extension。
-# 具体玩法不写在这里；编辑 interaction/ 与 interaction-system Skill。
-# =============================================================================
-interaction:
-  enabled: true
-
-# =============================================================================
-# 路径配置
-# =============================================================================
-paths:
-  characters_dir: "literature/characters"
-  scenarios_dir: "literature/scenarios"
-  output_dir: "output"
-
-# =============================================================================
-# 叙事者
-# =============================================================================
-narrator:
-  name: "{作品名}"
-  creator: "{创作者名称}"
-  description: "《{作品名}》的叙事者。"
-  personality: "{叙事者的简短性格或创作定位}"
-  persona: |
-    你是《{作品名}》的叙事者。文学与扮演指南以本角色卡为准，角色、地点、关系和世界事实以已激活世界书为准。
-
-    【文学与扮演原则】
-    - {作品基调、叙事身份与视角规则}
-    - {角色对白、动作和心理描写规则}
-    - {身份切换或多角色扮演规则}
-    - 不自行改写角色卡与世界书中的既有事实。
-  style_instructions: |
-    {把文风要求写成每轮可直接执行的简短规则，例如句式、描写密度、对白格式和禁止项。}
-
-# =============================================================================
-# 风格样本（注入角色卡 description）
-# =============================================================================
-style_sample:
-  source_file: "literature/fanfic/示例对话.txt"
-  max_length: 1500
-
-# =============================================================================
-# 状态更新契约
-# update_rules 定义单个维度的语义；此处定义所有维度共同遵守的限制。
-# custom_rules 是套件作者的扩展入口，可写互斥条件、剧情旗标规则和特殊角色例外。
-# =============================================================================
-state_system:
-  persist_file: "persist/character_states.json"
-  max_characters_per_turn: 2
-  max_delta_per_dimension: 5
-  custom_rules: |
-    - 只更新当前轮有实际台词、动作、选择或明确受事件影响的角色。
-    - 同一事实不得跨轮重复计分；没有新进展时保持原值。
-    - {在这里补充本角色卡套件独有的状态更新规则。}
-  non_agent:
-    # 仅影响 non_agent 构建。true：角色卡输出兼容原 SillyTavern 状态脚本的 _.set(...) 块。
-    # false：角色卡不输出每轮更新命令；场景中的 legacy 初始化块仍保留。
-    emit_legacy_updates: true
-
-# =============================================================================
-# Agent 配置档案
-# agentSystemPrompt 固定为 null，由 TauriTavern 按实际工具生成默认运行协议。
-# Profile 对 Skills 使用 visible: ["*"]；state-system 的必读性由 Agent 角色卡桥接指令保证。
-# =============================================================================
-agent:
-  max_rounds: 12
-  max_tool_calls: 30
-  model_retries: 2
-  # 子 Agent 默认关闭；此模板不会授予 agent.delegate 等工具。
-  # 仅在明确需要随机事件/检定时调用 dice.roll。
-  enable_dice: true
-
-# =============================================================================
-# 本项目要打包的 SKILLS 清单（不是运行时白名单）
-# 每个目录单独打包为一个 .ttskill；用户本地其他 Skills 仍对 Agent 可见。
-# =============================================================================
-skills:
-  - id: "state-system"
-    source_dir: "skills/state-system"
-  - id: "interaction-system"
-    source_dir: "skills/interaction-system"
-
-# =============================================================================
-# 主题（可选）
-# =============================================================================
-theme:
-  source_file: "theme/agent-overrides.css"
-```
+完整字段、默认值和注释以 [`tauritavern.template.yaml`](tauritavern.template.yaml) 为准。
 
 ---
 
@@ -231,8 +100,8 @@ theme:
 
 ### Step 1: 配置与规划
 
-1. 复制 `AGENTS.md`、`CLAUDE.md`、`scripts/` 到新项目
-2. 编辑第 2 节配置区，替换 `{占位符}`，并为 `project.id` 设置稳定 ASCII 标识
+1. 在 `projects/<project-id>/` 创建具体项目；将其中的 `AGENTS.md` 作为该作品的维护与创作指南
+2. 编辑项目自己的 `tauritavern.yaml`，替换 `{占位符}`，并为 `project.id` 设置稳定 ASCII 标识
 3. 选择 `build.target`：`agent` 或 `non_agent`
 4. 角色阶段、生成策略和运行时状态统一使用 JSON
 5. Agent 目标需要点击式交互时保留 `interaction.enabled: true`；纯文字套件设为 `false`
@@ -287,7 +156,7 @@ Profile 的工具清单按 TauriTavern 当前规范使用精确工具名：默�
 - `persist/character_states.json` 和 `persist/interaction-state.json` 在首轮前默认不存在。Agent 应先列出 workspace，再创建缺失文件；首轮 `Not found` 不是应向用户报错的状态。
 - 不要把具体剧情判断写入通用扩展 JavaScript；应放入角色卡、世界书、状态规则或作者自己的 Skills。
 
-仓库内的 `examples/hongloumeng/` 是最小完整示例，同时由 `tests/test_hongloumeng_example.py` 验证地图区域、必要人物、世界书、阶段资料和实际生成产物保持一致。示例不会进入默认项目输出。
+仓库内的 `projects/hongloumeng/` 是最小完整项目，同时由 `tests/test_hongloumeng_project.py` 验证地图区域、必要人物、世界书、阶段资料和实际生成产物保持一致。`projects/` 只存放用户拥有的配置与创作内容；根目录的生成器、通用 Skills、扩展运行时和主题由模板统一维护。
 
 **风格样本** — 从原著选取代表段落，原则：
 - 叙事节奏、对话风格、描写手法各选 1 段
@@ -320,13 +189,13 @@ variables:             # 可选：本开场的初始状态，键必须使用 dim
 ### Step 4: 生成输出
 
 ```bash
-python scripts/generate.py
+python scripts/generate.py projects/<project-id>
 ```
 
-也可以从模板仓库直接构建子项目或示例；缺少的通用 Skills、扩展运行时和主题会从模板根目录读取，项目自己的同路径文件优先：
+也可以从模板仓库直接构建 `projects/` 下的具体项目；缺少的通用 Skills、扩展运行时和主题会从模板根目录读取，项目自己的同路径文件优先：
 
 ```bash
-python scripts/generate.py examples/hongloumeng
+python scripts/generate.py projects/hongloumeng
 ```
 
 脚本读取 `build.target` 后只生成对应目标：

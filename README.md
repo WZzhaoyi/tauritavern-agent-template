@@ -14,21 +14,23 @@ Agent 构建遵循“扩展而非替代”：Profile 使用 `agentSystemPrompt: 
 
 在 GitHub 仓库页面选择 **Use this template → Create a new repository**，然后克隆新仓库。也可以直接复制本仓库并删除原有 Git 历史。
 
+具体作品统一放在 `projects/<project-id>/`。用户只修改项目子目录；根目录的生成器、通用 Skills、扩展运行时和默认主题保持由模板更新。根目录的 `tauritavern.template.yaml` 是新项目配置模板，可以参考 `projects/hongloumeng/` 创建完整项目目录。
+
 ## 快速开始
 
 ```bash
 pip install -r requirements.txt
 ```
 
-生成器使用 Python 3.11 测试；运行时资源全部为 JSON、SVG、JavaScript 和 CSS。Python 侧仅使用 `PyYAML` 读取 `AGENTS.md` 配置块和场景 Markdown frontmatter。
+生成器使用 Python 3.11 测试；运行时资源全部为 JSON、SVG、JavaScript 和 CSS。Python 侧使用 `PyYAML` 读取独立的 `tauritavern.yaml` 和场景 Markdown frontmatter。`AGENTS.md` 只作为项目维护与创作指南，不再作为机器配置来源。
 
-1. 编辑 `AGENTS.md` 第 2 节配置区，设置 `build.target: "agent"` 或 `"non_agent"`，并填入作品与状态配置；Agent 目标可用 `interaction.enabled` 开关点击交互
-2. 将文学与扮演指南写入角色卡；将角色、设定和背景维护在传统世界书
-3. 在 `literature/characters/` 下创建状态阶段资料，在 `literature/scenarios/` 下创建开场剧本
+1. 在 `projects/<project-id>/` 创建项目，并编辑其中的 `tauritavern.yaml`；设置 `build.target: "agent"` 或 `"non_agent"`，Agent 目标可用 `interaction.enabled` 开关点击交互
+2. 将文学与扮演指南写入项目角色卡配置；将角色、设定和背景维护在项目的传统世界书
+3. 在项目的 `literature/characters/` 下创建状态阶段资料，在 `literature/scenarios/` 下创建开场剧本
 4. 运行生成脚本：
 
 ```bash
-python scripts/generate.py
+python scripts/generate.py projects/<project-id>
 ```
 
 5. 导入目标目录中的产物：
@@ -55,16 +57,16 @@ interaction/
 
 点击行动后，扩展通过官方 Agent Host API 直接启动回合，不会在聊天中留下可见的控制协议，也不需要再点发送按钮。Agent 成功提交后，界面从 `output/main.md`、`persist/character_states.json` 和 `persist/interaction-state.json` 刷新剧情、角色数值和交互状态。交互资源与持久状态均使用 JSON，前端不依赖外部 YAML 解析器。
 
-## 示例与测试
+## 项目与测试
 
-[《红楼梦》大观园最小示例](examples/hongloumeng/README.md)提供四个地点、四名必要人物、五项基础行动、一个开场和一份最小世界书。它不会进入默认生成产物，同时也是跨文件一致性和真实 Agent 构建测试：
+[《红楼梦》大观园项目](projects/hongloumeng/README.md)提供四个地点、四名必要人物、五项基础行动、一个开场和一份最小世界书。`projects/` 聚合用户自定义内容，根目录保留可统一更新的模板代码；该项目同时也是跨文件一致性和真实 Agent 构建测试：
 
 ```bash
-python scripts/generate.py examples/hongloumeng
+python scripts/generate.py projects/hongloumeng
 python -m unittest discover -s tests -v
 ```
 
-测试会构建默认模板和《红楼梦》示例，校验 SVG 区域、角色阶段资料、世界书与生成产物的一致性，并防止通用运行时意外引入示例专有内容。
+测试会构建默认模板和《红楼梦》项目，校验 SVG 区域、角色阶段资料、世界书与生成产物的一致性，并防止通用运行时意外引入项目专有内容。
 
 ## 构建目标
 
@@ -79,19 +81,20 @@ python -m unittest discover -s tests -v
 
 Agent `persist/` 与 legacy 状态脚本是两个独立存储。共用源数据不等于产物或聊天进度可直接互换。
 
-`AGENTS.md` 中的 `skills:` 清单只用于打包本项目随套件分发的 `.ttskill`，不是 Profile 的运行时白名单。
+`tauritavern.yaml` 中的 `skills:` 清单只用于打包本项目随套件分发的 `.ttskill`，不是 Profile 的运行时白名单。
 
 ## 项目结构
 
 ```
-├── AGENTS.md         # 配置中心与完整文档
+├── AGENTS.md         # 项目维护与创作指南
+├── tauritavern.template.yaml # 新项目配置模板
 ├── literature/       # 状态阶段资料、场景剧本、角色卡风格参考
 ├── lorebooks/        # 可选的传统世界书
 ├── skills/           # 状态与可选交互协议 Skills
 ├── interaction/      # 作者维护的声明式地图、区域和行动
 ├── extensions/       # 通用交互 UI 运行时
-├── examples/         # 不进入默认产物的完整创作示例
-├── tests/            # 示例构建与跨文件一致性测试
+├── projects/         # 用户拥有的具体项目，自定义内容集中在各项目子目录
+├── tests/            # 项目构建与跨文件一致性测试
 ├── theme/            # 前端美化 CSS（可选）
 ├── scripts/          # 生成脚本
 └── output/
@@ -101,7 +104,7 @@ Agent `persist/` 与 legacy 状态脚本是两个独立存储。共用源数据�
 
 ## 详细文档
 
-完整的配置说明、工作流步骤和文件格式规范，请参阅 [AGENTS.md](AGENTS.md)。
+配置字段和默认值请参阅根目录的 [tauritavern.template.yaml](tauritavern.template.yaml)；具体项目应维护自己的 `tauritavern.yaml`。工作流步骤和文件格式规范请参阅 [AGENTS.md](AGENTS.md)。
 
 Agent 目标需要所选 LLM API 稳定支持原生工具调用。状态只根据当前回合的明确证据更新；数值证据不足时保持不变。
 

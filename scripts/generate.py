@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 TauriTavern Agent 生成器
-版本: 2.6.0
+版本: 2.7.0
 
 按 build.target 生成互斥的运行目标产物：
   - agent     → Agent Profile + SKILLS + Agent 角色卡 + 可选交互扩展 + 主题
@@ -22,24 +22,38 @@ from typing import List, Optional
 
 
 class ConfigLoader:
-    """从 AGENTS.md 提取 YAML 配置块。"""
+    """读取独立项目配置。"""
+
+    CONFIG_FILENAME = "tauritavern.yaml"
+    SUPPORTED_SCHEMA_VERSION = 1
+
+    @classmethod
+    def load(cls, project_root: Path) -> dict:
+        config_file = project_root / cls.CONFIG_FILENAME
+        if not config_file.exists():
+            raise FileNotFoundError(f"{cls.CONFIG_FILENAME} not found")
+
+        config = cls._load_yaml_file(config_file)
+        schema_version = config.get("schema_version")
+        if (
+            isinstance(schema_version, bool)
+            or schema_version != cls.SUPPORTED_SCHEMA_VERSION
+        ):
+            raise ValueError(
+                f"{cls.CONFIG_FILENAME} schema_version must be "
+                f"{cls.SUPPORTED_SCHEMA_VERSION}"
+            )
+        return config
 
     @staticmethod
-    def load(project_root: Path) -> dict:
-        agents_file = project_root / "AGENTS.md"
-        if not agents_file.exists():
-            raise FileNotFoundError("AGENTS.md not found")
-
-        text = agents_file.read_text(encoding="utf-8")
-        pattern = r"##\s*2\.\s*配置区.*?^```yaml\s*\n(.*?)^```\s*(?:---\s*)?##\s*3\."
-        m = re.search(pattern, text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
-        if not m:
-            raise ValueError("Cannot find YAML config block in AGENTS.md")
-
+    def _load_yaml_file(path: Path) -> dict:
         try:
-            return yaml.safe_load(m.group(1)) or {}
+            config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         except yaml.YAMLError as e:
-            raise ValueError(f"YAML parse error: {e}")
+            raise ValueError(f"YAML parse error in {path.name}: {e}")
+        if not isinstance(config, dict):
+            raise ValueError(f"{path.name} must contain a YAML mapping")
+        return config
 
 
 class AgentGenerator:
@@ -69,7 +83,7 @@ class AgentGenerator:
         )
 
     def _source_path(self, relative_path: str) -> Path:
-        """项目可覆盖模板资源；示例缺省时回退到模板仓库。"""
+        """项目可覆盖模板资源；具体项目缺省时回退到模板仓库。"""
         project_path = self.root / relative_path
         if project_path.exists() or self.template_root == self.root:
             return project_path
@@ -812,7 +826,7 @@ class AgentGenerator:
         return str(destination)
 
     def copy_project_lorebooks(self) -> List[str]:
-        """原样复制作者维护的传统世界书，方便示例与套件一起分发。"""
+        """原样复制作者维护的传统世界书，方便具体项目与套件一起分发。"""
         if not self.lorebooks_dir.exists():
             return []
         sources = sorted(self.lorebooks_dir.glob("*.json"))

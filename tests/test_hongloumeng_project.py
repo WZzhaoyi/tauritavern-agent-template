@@ -12,12 +12,12 @@ from scripts.generate import AgentGenerator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE_ROOT = REPO_ROOT / "examples" / "hongloumeng"
+PROJECT_ROOT = REPO_ROOT / "projects" / "hongloumeng"
 
 
-class HongloumengExampleTest(unittest.TestCase):
+class HongloumengProjectTest(unittest.TestCase):
     def load_regions(self):
-        source = EXAMPLE_ROOT / "interaction" / "regions.json"
+        source = PROJECT_ROOT / "interaction" / "regions.json"
         return json.loads(source.read_text(encoding="utf-8"))["regions"]
 
     def test_map_regions_characters_and_worldbook_match(self):
@@ -25,7 +25,7 @@ class HongloumengExampleTest(unittest.TestCase):
         region_ids = {region["id"] for region in regions}
         self.assertEqual(4, len(region_ids))
 
-        svg_root = ET.parse(EXAMPLE_ROOT / "interaction" / "map.svg").getroot()
+        svg_root = ET.parse(PROJECT_ROOT / "interaction" / "map.svg").getroot()
         map_ids = {
             node.attrib["data-region-id"]
             for node in svg_root.iter()
@@ -34,7 +34,7 @@ class HongloumengExampleTest(unittest.TestCase):
         self.assertEqual(region_ids, map_ids)
 
         worldbook = json.loads(
-            (EXAMPLE_ROOT / "lorebooks" / "hongloumeng-minimal.worldbook.json")
+            (PROJECT_ROOT / "lorebooks" / "hongloumeng-minimal.worldbook.json")
             .read_text(encoding="utf-8")
         )
         entries = list(worldbook["entries"].values())
@@ -47,7 +47,7 @@ class HongloumengExampleTest(unittest.TestCase):
                 character_labels.add(character["label"])
                 self.assertIn(character["label"], keys)
                 stage_file = (
-                    EXAMPLE_ROOT
+                    PROJECT_ROOT
                     / "literature"
                     / "characters"
                     / f"{character['label']}_stages.json"
@@ -56,12 +56,19 @@ class HongloumengExampleTest(unittest.TestCase):
 
         self.assertEqual({"贾宝玉", "林黛玉", "薛宝钗", "贾探春"}, character_labels)
 
-    def test_example_builds_real_agent_artifacts(self):
-        with tempfile.TemporaryDirectory(prefix="hongloumeng-example-") as tmp:
+    def test_project_builds_real_agent_artifacts(self):
+        with tempfile.TemporaryDirectory(prefix="hongloumeng-project-") as tmp:
             project = Path(tmp)
-            shutil.copy2(EXAMPLE_ROOT / "AGENTS.md", project / "AGENTS.md")
+            shutil.copy2(PROJECT_ROOT / "AGENTS.md", project / "AGENTS.md")
+            shutil.copy2(
+                PROJECT_ROOT / "tauritavern.yaml", project / "tauritavern.yaml"
+            )
             for directory in ("interaction", "literature", "lorebooks"):
-                shutil.copytree(EXAMPLE_ROOT / directory, project / directory)
+                shutil.copytree(PROJECT_ROOT / directory, project / directory)
+
+            self.assertNotIn(
+                "```yaml", (project / "AGENTS.md").read_text(encoding="utf-8")
+            )
 
             with contextlib.redirect_stdout(io.StringIO()):
                 AgentGenerator(str(project), str(REPO_ROOT)).run()
@@ -143,7 +150,7 @@ class HongloumengExampleTest(unittest.TestCase):
                 self.assertIn("extensions.briefing", interaction_skill)
                 self.assertIn("workspace.commit", interaction_skill)
                 self.assertEqual(
-                    (EXAMPLE_ROOT / "interaction" / "map.svg").read_bytes(),
+                    (PROJECT_ROOT / "interaction" / "map.svg").read_bytes(),
                     package.read("assets/map.svg"),
                 )
                 actions = json.loads(package.read("assets/actions.json"))
@@ -175,7 +182,7 @@ class HongloumengExampleTest(unittest.TestCase):
                 output / "lorebooks" / "hongloumeng-minimal.worldbook.json"
             )
             self.assertEqual(
-                (EXAMPLE_ROOT / "lorebooks" / "hongloumeng-minimal.worldbook.json")
+                (PROJECT_ROOT / "lorebooks" / "hongloumeng-minimal.worldbook.json")
                 .read_bytes(),
                 generated_lorebook.read_bytes(),
             )

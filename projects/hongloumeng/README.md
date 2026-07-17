@@ -1,6 +1,6 @@
-# 《红楼梦》大观园最小示例
+# 《红楼梦》大观园项目
 
-这个示例证明暂停式交互不需要先设计完整游戏系统。它只提供：
+这个最小项目证明暂停式交互不需要先设计完整游戏系统。它只提供：
 
 - 四个地图地点：怡红院、潇湘馆、蘅芜苑、秋爽斋。
 - 四名与地点直接对应的人物：贾宝玉、林黛玉、薛宝钗、贾探春。
@@ -10,17 +10,19 @@
 
 地图与静态行动只负责提供初始入口。一次 Agent 回合结束后，`persist/interaction-state.json` 可以根据当前场景提供更具体的动态选项，例如“问起旧诗”“帮忙整理诗稿”或“暂不追问”。
 
-示例不假定玩家必须扮演贾宝玉。玩家身份仍由当前 Persona 和场景决定，普通文字输入也始终有效。
+项目不假定玩家必须扮演贾宝玉。玩家身份仍由当前 Persona 和场景决定，普通文字输入也始终有效。
+
+本目录是作品层与框架层分离的最小实例：`tauritavern.yaml` 保存构建配置，`AGENTS.md` 只保存项目维护指南；通用 Skills、交互扩展和主题由仓库根目录的框架提供。
 
 ## 生成可导入产物
 
 在仓库根目录执行：
 
 ```bash
-python scripts/generate.py examples/hongloumeng
+python scripts/generate.py projects/hongloumeng
 ```
 
-结果位于 `examples/hongloumeng/output/agent/`，包括角色卡、Agent Profile、两个 `.ttskill`、交互扩展、主题和 `lorebooks/` 下的最小世界书。
+结果位于 `projects/hongloumeng/output/agent/`，包括角色卡、Agent Profile、两个 `.ttskill`、交互扩展、主题和 `lorebooks/` 下的最小世界书。
 
 ## 运行测试
 
@@ -30,9 +32,9 @@ python scripts/generate.py examples/hongloumeng
 python -m unittest discover -s tests -v
 ```
 
-测试会在临时目录中组合通用模板与本示例，并验证：
+测试会在临时目录中组合通用模板与本项目，并验证：
 
 1. SVG 中的可点击区域和 `regions.json` 完全对应。
 2. 每个区域声明的人物都存在于最小世界书和阶段资料中。
 3. 真实生成器能产出角色卡、Profile、两个 Skills 和项目专用 UI Extension。
-4. 打包后的 `interaction-system.ttskill` 确实包含本示例地图与行动。
+4. 打包后的 `interaction-system.ttskill` 确实包含本项目地图与行动。
