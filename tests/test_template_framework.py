@@ -103,11 +103,6 @@ class TemplateFrameworkTest(unittest.TestCase):
                 project / "literature/scenarios", generator.scenarios_dir
             )
             self.assertEqual(project / "output", generator.output_root)
-            self.assertEqual(
-                REPO_ROOT / "extensions/interaction-runtime",
-                generator._source_path("extensions/interaction-runtime"),
-            )
-
         for directory in ("literature", "interaction", "output"):
             self.assertFalse((REPO_ROOT / directory).exists(), directory)
 
@@ -116,6 +111,44 @@ class TemplateFrameworkTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("hongloumeng", runtime.lower())
         self.assertNotIn("红楼梦", runtime)
+
+    def test_shared_interaction_runtime_contract(self):
+        extension = REPO_ROOT / "extensions" / "interaction-runtime"
+        extension_code = (extension / "index.js").read_text(encoding="utf-8")
+        extension_css = (extension / "style.css").read_text(encoding="utf-8")
+
+        self.assertTrue((extension / "manifest.json").exists())
+        self.assertNotIn("import config", extension_code)
+        self.assertIn("activeCardConfig", extension_code)
+        self.assertIn("activeCharacterSkillScope", extension_code)
+        self.assertIn("{ kind: 'character', characterId }", extension_code)
+        self.assertNotIn("{ kind: 'character', id: characterId }", extension_code)
+        self.assertIn("readFile({ scope, name: skillName", extension_code)
+        self.assertIn("JSON.parse", extension_code)
+        self.assertNotIn("libs?.yaml", extension_code)
+        self.assertNotIn("/send", extension_code)
+        self.assertIn("quiet_prompt: runtime.lastActionRecord", extension_code)
+        self.assertIn("quietToLoud: true", extension_code)
+        self.assertIn("presentation: 'background'", extension_code)
+        self.assertIn("<tt_interaction_input", extension_code)
+        self.assertIn("runtime.runCommitted", extension_code)
+        self.assertIn("请更换 API", extension_code)
+        self.assertIn("model\\.tool_call_required", extension_code)
+        self.assertIn("readWorkspaceFile", extension_code)
+        self.assertIn("agent.listRuns", extension_code)
+        self.assertIn("renderNarrative", extension_code)
+        self.assertIn("renderBriefing", extension_code)
+        self.assertIn("waifuMode", extension_code)
+        self.assertIn("custom_input", extension_code)
+        self.assertIn("submitCustomAction", extension_code)
+        self.assertIn("grid-template-columns: minmax(0, 1fr)", extension_css)
+        self.assertIn("data-open", extension_css)
+        self.assertIn("data-vn-mode", extension_css)
+        self.assertIn("tt-interaction-progress", extension_css)
+        self.assertLess(
+            extension_code.index("store.listKeys"),
+            extension_code.index("store.getJson"),
+        )
 
     def test_neutral_template_does_not_assume_perspective_or_state(self):
         with tempfile.TemporaryDirectory(prefix="tauritavern-neutral-") as tmp:
@@ -167,9 +200,17 @@ class TemplateFrameworkTest(unittest.TestCase):
                 '{"regions":[{"id":"start","label":"起点"}]}',
                 encoding="utf-8",
             )
+            for legacy_name in (
+                "my-card-writer-interaction",
+                "tauritavern-interaction",
+            ):
+                legacy = project / "output" / "agent" / "extensions" / legacy_name
+                legacy.mkdir(parents=True)
+                (legacy / "manifest.json").write_text("{}", encoding="utf-8")
 
             AgentGenerator(str(project), str(REPO_ROOT)).run()
             output = project / "output" / "agent"
+            self.assertFalse((output / "extensions").exists())
             archives = sorted(path.name for path in (output / "skills").glob("*.ttskill"))
             self.assertEqual(
                 ["my-card-writer-interaction-system.ttskill"], archives

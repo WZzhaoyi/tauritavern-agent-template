@@ -1,22 +1,11 @@
 # 暂停式交互扩展
 
-这是一次安装即可服务多个项目的通用 UI 运行时：
-
-- 根目录 `extensions/interaction-runtime/` 是框架源码。
-- `projects/<project-id>/output/agent/extensions/tauritavern-interaction/` 是可安装副本。
-
-请只安装生成后的扩展，不要直接安装或修改根目录模板。重新构建会覆盖生成目录。
+这是一次安装即可服务多个项目的通用 UI 运行时。项目构建不会复制它。
 
 ## 安装
 
-1. 构建项目：
-
-   ```bash
-   python scripts/generate.py projects/<project-id>
-   ```
-
-2. 将生成的扩展目录复制到 SillyTavern/TauriTavern 扩展目录；发布时也可以把该目录作为独立 Git 仓库安装。
-3. 同时导入项目生成的角色卡和 Agent Profile；导入项目前缀命名的 `skills/*.ttskill` 时，把目标作用域设为该角色卡。不要导入到全局、预设或 Profile 作用域。
+1. 将模板根目录 `extensions/interaction-runtime/` 安装到 SillyTavern/TauriTavern。
+2. 后续项目只需导入角色卡、Agent Profile 和角色作用域 Skills，无需重复安装扩展。
 
 项目配置由角色卡的 `tauritavern_interaction` 标记提供，不写死在扩展中。多个项目共用同一扩展，切换角色卡时自动切换 Profile、角色作用域 Skill、状态路径与缓存命名空间。普通聊天输入和面板内的自定义行动输入始终可用。
 
@@ -28,12 +17,11 @@
 - `projects/<project-id>/interaction/regions.json`
 - `projects/<project-id>/interaction/map.svg`
 
-只有需要改变通用交互工作流或 UI 逻辑时，才在项目中添加同路径覆盖：
+只有需要改变交互工作流时，才在项目中覆盖：
 
 - `projects/<project-id>/skills/interaction-system/SKILL.md`
-- `projects/<project-id>/extensions/interaction-runtime/`
 
-项目未提供覆盖时，生成器自动使用根目录的通用 Skill 和扩展运行时。
+通用 UI 逻辑只在根目录 `extensions/interaction-runtime/` 维护。
 
 ## 运行要点
 
