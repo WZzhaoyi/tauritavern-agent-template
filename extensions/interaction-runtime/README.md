@@ -1,9 +1,9 @@
 # 暂停式交互扩展
 
-本说明随通用 UI 运行时一起复制：
+这是一次安装即可服务多个项目的通用 UI 运行时：
 
 - 根目录 `extensions/interaction-runtime/` 是框架源码。
-- `projects/<project-id>/output/agent/extensions/<project-id>-interaction/` 是注入项目配置后的可安装扩展。
+- `projects/<project-id>/output/agent/extensions/tauritavern-interaction/` 是可安装副本。
 
 请只安装生成后的扩展，不要直接安装或修改根目录模板。重新构建会覆盖生成目录。
 
@@ -16,9 +16,9 @@
    ```
 
 2. 将生成的扩展目录复制到 SillyTavern/TauriTavern 扩展目录；发布时也可以把该目录作为独立 Git 仓库安装。
-3. 同时导入项目生成的角色卡、Agent Profile 和 `skills/interaction-system.ttskill`。
+3. 同时导入项目生成的角色卡和 Agent Profile；导入项目前缀命名的 `skills/*.ttskill` 时，把目标作用域设为该角色卡。不要导入到全局、预设或 Profile 作用域。
 
-只有带有对应 `projectId` 标记的角色卡会显示交互入口。普通文字输入始终可用。
+项目配置由角色卡的 `tauritavern_interaction` 标记提供，不写死在扩展中。多个项目共用同一扩展，切换角色卡时自动切换 Profile、角色作用域 Skill、状态路径与缓存命名空间。普通聊天输入和面板内的自定义行动输入始终可用。
 
 ## 项目自定义
 
@@ -38,6 +38,6 @@
 ## 运行要点
 
 - 地图元素的 `data-region-id` 必须对应 `regions.json` 中的区域 ID。
-- Agent 成功提交后，扩展读取 `output/main.md`、`persist/character_states.json` 和 `persist/interaction-state.json`。
+- Agent 成功提交后，扩展读取 `output/main.md` 和 `persist/interaction-state.json`；声明角色状态维度时再读取对应角色状态文件。
+- 预设行动与面板自由输入使用同一回合流程；自由输入支持 `Ctrl/Cmd+Enter` 提交。
 - 界面缓存只用于恢复展示，不替代 Agent workspace 中的权威文件。
-- 若聊天中仍出现可见的 `[交互行动]`，替换旧扩展和 Skill 后完全重启 TauriTavern。

@@ -75,7 +75,10 @@ class HongloumengProjectTest(unittest.TestCase):
                 AgentGenerator(str(project), str(REPO_ROOT)).run()
 
             output = project / "output" / "agent"
-            self.assertIn(f"产物目录：{output}/", build_log.getvalue())
+            build_output = build_log.getvalue()
+            self.assertIn(f"产物目录：{output}/", build_output)
+            self.assertIn("把导入目标设为刚导入的角色卡", build_output)
+            self.assertIn("不要导入到全局、预设或 Profile 作用域", build_output)
             card = json.loads(
                 (output / "hongloumeng-garden.character-card.json")
                 .read_text(encoding="utf-8")
@@ -85,37 +88,74 @@ class HongloumengProjectTest(unittest.TestCase):
                 .read_text(encoding="utf-8")
             )
 
+            interaction_marker = card["data"]["extensions"]["tauritavern_interaction"]
+            skill_binding = card["data"]["extensions"][
+                "tauritavern_agent_template"
+            ]
+            self.assertEqual("character", skill_binding["skillInstallScope"])
             self.assertEqual(
-                "hongloumeng-garden",
-                card["data"]["extensions"]["tauritavern_interaction"]["projectId"],
+                {
+                    "hongloumeng-garden-interaction-system",
+                    "hongloumeng-garden-state-system",
+                },
+                set(skill_binding["requiredSkills"]),
+            )
+            self.assertIn("目标作用域设为本角色卡", card["data"]["creator_notes"])
+            self.assertIn("不要安装到全局", card["data"]["creator_notes"])
+            self.assertEqual("hongloumeng-garden", interaction_marker["projectId"])
+            self.assertEqual(
+                "hongloumeng-garden-interaction-system",
+                interaction_marker["skillName"],
+            )
+            self.assertEqual(
+                "hongloumeng-garden-state-system",
+                interaction_marker["stateSkillName"],
             )
             self.assertIn("诗社", card["data"]["first_mes"])
+            self.assertIn("<details>", card["data"]["first_mes"])
             self.assertIn("<agent_state_init>", card["data"]["first_mes"])
-            self.assertIn("interaction-system", card["data"]["post_history_instructions"])
+            self.assertIn(
+                "hongloumeng-garden-interaction-system",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "不先 list/search Skill",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "使用 skill.read 读取",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "若该精确安装名不可见",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertNotIn("角色作用域", card["data"]["post_history_instructions"])
+            self.assertNotIn(
+                "全局、预设或 Profile 作用域",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "不是 Skill 白名单",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "其它由当前 run 解析且经 Profile 过滤后可见的 Skills 可按需正常使用",
+                card["data"]["post_history_instructions"],
+            )
             self.assertIsNone(profile["instructions"]["agentSystemPrompt"])
             self.assertEqual(["*"], profile["skills"]["visible"])
+            self.assertEqual([], profile["skills"]["deny"])
 
-            extension = output / "extensions" / "hongloumeng-garden-interaction"
+            extension = output / "extensions" / "tauritavern-interaction"
             self.assertTrue((extension / "manifest.json").exists())
             self.assertTrue((extension / "LICENSE").exists())
-            self.assertIn(
-                '"projectId": "hongloumeng-garden"',
-                (extension / "package-config.js").read_text(encoding="utf-8"),
-            )
-            self.assertIn(
-                '"projectName": "红楼梦·大观园"',
-                (extension / "package-config.js").read_text(encoding="utf-8"),
-            )
-            extension_config = (extension / "package-config.js").read_text(
-                encoding="utf-8"
-            )
-            self.assertIn('"stateSkillName": "state-system"', extension_config)
-            self.assertIn(
-                '"characterStateFile": "persist/character_states.json"',
-                extension_config,
-            )
-            self.assertIn('"narrativeFile": "output/main.md"', extension_config)
+            self.assertFalse((extension / "package-config.js").exists())
             extension_code = (extension / "index.js").read_text(encoding="utf-8")
+            self.assertNotIn("import config", extension_code)
+            self.assertIn("activeCardConfig", extension_code)
+            self.assertIn("activeCharacterSkillScope", extension_code)
+            self.assertIn("readFile({ scope, name: skillName", extension_code)
             self.assertIn("JSON.parse", extension_code)
             self.assertNotIn("libs?.yaml", extension_code)
             self.assertNotIn("/send", extension_code)
@@ -131,6 +171,8 @@ class HongloumengProjectTest(unittest.TestCase):
             self.assertIn("renderNarrative", extension_code)
             self.assertIn("renderBriefing", extension_code)
             self.assertIn("waifuMode", extension_code)
+            self.assertIn("custom_input", extension_code)
+            self.assertIn("submitCustomAction", extension_code)
             extension_css = (extension / "style.css").read_text(encoding="utf-8")
             self.assertIn("grid-template-columns: minmax(0, 1fr)", extension_css)
             self.assertIn("data-open", extension_css)
@@ -141,14 +183,23 @@ class HongloumengProjectTest(unittest.TestCase):
                 extension_code.index("store.getJson"),
             )
 
-            archive = output / "skills" / "interaction-system.ttskill"
+            archive = (
+                output
+                / "skills"
+                / "hongloumeng-garden-interaction-system.ttskill"
+            )
             with zipfile.ZipFile(archive) as package:
                 interaction_skill = package.read("SKILL.md").decode("utf-8")
-                self.assertIn("workspace.list_files", interaction_skill)
+                self.assertIn(
+                    "name: hongloumeng-garden-interaction-system", interaction_skill
+                )
+                self.assertIn("仅适用于《红楼梦·大观园》", interaction_skill)
+                self.assertNotIn("角色作用域", interaction_skill)
+                self.assertIn("不要先列 workspace 目录", interaction_skill)
                 self.assertIn("正常首轮", interaction_skill)
                 self.assertIn("<tt_interaction_input", interaction_skill)
                 self.assertIn("有界快速路径", interaction_skill)
-                self.assertIn("不得重复列目录", interaction_skill)
+                self.assertIn("不重试读取", interaction_skill)
                 self.assertIn("extensions.briefing", interaction_skill)
                 self.assertIn("workspace.commit", interaction_skill)
                 self.assertEqual(
@@ -164,11 +215,17 @@ class HongloumengProjectTest(unittest.TestCase):
                 self.assertEqual(
                     "persist/interaction-state.json", runtime["state_file"]
                 )
+                self.assertEqual(
+                    "hongloumeng-garden-state-system",
+                    runtime["state"]["skill_name"],
+                )
 
-            state_archive = output / "skills" / "state-system.ttskill"
+            state_archive = output / "skills" / "hongloumeng-garden-state-system.ttskill"
             with zipfile.ZipFile(state_archive) as package:
                 state_skill = package.read("SKILL.md").decode("utf-8")
-                self.assertIn("workspace.list_files", state_skill)
+                self.assertIn("name: hongloumeng-garden-state-system", state_skill)
+                self.assertNotIn("角色作用域", state_skill)
+                self.assertIn("不要先列目录", state_skill)
                 self.assertIn("workspace.write_file", state_skill)
                 self.assertIn("Agent 回合预算", state_skill)
                 self.assertIn("不读取任何角色阶段文件", state_skill)
