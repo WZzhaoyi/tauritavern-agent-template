@@ -33,11 +33,13 @@ python scripts/generate.py projects/<project-id>
 Agent 目标：
 
 1. 导入 `*.character-card.json`。
-2. 导入 `skills/*.ttskill`；安装名为 `<project-id>-<skill-id>`，可与其它项目共存。
+2. 在 Agent 系统面板导入 `skills/*.ttskill`，并把导入目标设为刚导入角色卡的“角色”作用域。不要把项目产物安装到全局、预设或 Profile 作用域。安装名为 `<project-id>-<skill-id>`，可与其它项目共存。
 3. 导入并启用 `*.agent-profile.json`。
 4. 开启 Agent Mode。
 5. 如启用交互，安装 `extensions/tauritavern-interaction/`；同一份通用扩展可服务多个项目。
 6. 导入并绑定 `lorebooks/` 中的世界书。
+
+角色卡中的 `skillInstallScope` 和 `requiredSkills` 是模板导入清单，不会替用户执行安装，也不是运行时白名单。Profile 保持 `skills.visible: ["*"]`、`deny: []`，用户其它经当前运行解析为可见的 Skills 仍可按需使用。
 
 非 Agent 目标：
 

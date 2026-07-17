@@ -108,7 +108,7 @@ description: 将玩家点击行动转换为暂停式 Agent 回合，并维护供
 
 一次正常点击回合应按以下四个工具阶段完成，独立调用全部并行：
 
-1. 直接读取角色卡指定的交互 Skill 根文件、固定短引用、交互状态文件与已激活世界书；若启用角色状态，同时读取指定状态 Skill、短引用及权威状态文件。全部并行，不先 list/search Skill 或列目录；状态文件 `Not found` 时直接初始化。已完整提供的点击标签不读取 actions/regions。
+1. 使用 `skill.read` 按角色卡指定的精确安装名读取交互 Skill 根文件和固定短引用，并并行读取交互状态文件与已激活世界书；若启用角色状态，同时按角色卡指定名称读取状态 Skill、短引用及权威状态文件。不先 list/search Skill 或列目录；状态文件 `Not found` 时直接初始化。已完整提供的点击标签不读取 actions/regions。
 2. 并行写入必要的持久状态、交互投影和 `output/main.md`；无数值变化时不重写角色状态。
 3. `workspace.commit`。
 4. `workspace.finish`。

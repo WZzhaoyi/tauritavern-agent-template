@@ -98,6 +98,15 @@ function activeCardConfig() {
   return marker;
 }
 
+function activeCharacterSkillScope() {
+  const context = stContext();
+  if (!context || context.groupId || context.characterId === undefined) return null;
+  const card = context.characters?.[context.characterId];
+  const avatar = typeof card?.avatar === 'string' ? card.avatar : '';
+  const characterId = avatar.replace(/\.[^.]+$/, '') || card?.name;
+  return characterId ? { kind: 'character', id: characterId } : null;
+}
+
 function projectConfig() {
   if (!runtime.projectConfig) throw new Error('当前角色卡缺少交互项目配置');
   return runtime.projectConfig;
@@ -356,6 +365,16 @@ function refreshVisibility() {
   const projectChanged = nextConfig?.projectId !== runtime.projectConfig?.projectId;
   if (projectChanged && !runtime.busy) {
     runtime.projectConfig = nextConfig;
+    runtime.selectedTarget = null;
+    runtime.baseActions = [];
+    runtime.regions = [];
+    runtime.state = null;
+    runtime.characterState = null;
+    runtime.dimensions = [];
+    runtime.narrative = '';
+    runtime.narrativeRunId = null;
+    runtime.stageView = 'map';
+    runtime.lastActionRecord = null;
   } else if (!nextConfig && !runtime.busy) {
     runtime.projectConfig = null;
   }
@@ -374,8 +393,12 @@ async function readSkillText(path, optional = false, skillName = projectConfig()
   if (!skillApi?.readFile) {
     throw new Error('当前 TauriTavern 未提供 Skill Host API');
   }
+  const scope = activeCharacterSkillScope();
+  if (!scope) {
+    throw new Error('无法确定当前角色卡的 Skill 作用域');
+  }
   try {
-    const file = await skillApi.readFile({ name: skillName, path, maxChars: 80000 });
+    const file = await skillApi.readFile({ scope, name: skillName, path, maxChars: 80000 });
     return file.content;
   } catch (error) {
     if (optional) return null;

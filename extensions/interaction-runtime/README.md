@@ -16,9 +16,9 @@
    ```
 
 2. 将生成的扩展目录复制到 SillyTavern/TauriTavern 扩展目录；发布时也可以把该目录作为独立 Git 仓库安装。
-3. 同时导入项目生成的角色卡、Agent Profile 和项目前缀命名的 `skills/*.ttskill`。
+3. 同时导入项目生成的角色卡和 Agent Profile；导入项目前缀命名的 `skills/*.ttskill` 时，把目标作用域设为该角色卡。不要导入到全局、预设或 Profile 作用域。
 
-项目配置由角色卡的 `tauritavern_interaction` 标记提供，不写死在扩展中。多个项目共用同一扩展，切换角色卡时自动切换 Profile、Skill、状态路径与缓存命名空间。普通聊天输入和面板内的自定义行动输入始终可用。
+项目配置由角色卡的 `tauritavern_interaction` 标记提供，不写死在扩展中。多个项目共用同一扩展，切换角色卡时自动切换 Profile、角色作用域 Skill、状态路径与缓存命名空间。普通聊天输入和面板内的自定义行动输入始终可用。
 
 ## 项目自定义
 

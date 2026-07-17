@@ -56,6 +56,7 @@ projects/<project-id>/         项目维护
 - 素材和输出目录使用固定约定，不在配置中重定义路径。
 - `skills:` 只表示随套件打包的 Skills，不是运行时白名单。
 - Agent Profile 的 `agentSystemPrompt` 保持 `null`，`skills.visible` 保持 `["*"]`。
+- 项目生成的 Skill 必须导入并绑定到对应角色卡的角色作用域；这是用户导入约定，不是 Agent Prompt 限制，也不限制用户其它可见 Skills。
 
 ### 2. 编写素材
 
@@ -108,7 +109,7 @@ description: 一句话描述
 [场景正文，结尾留下待回应的钩子]
 ```
 
-- `pov` 和 `variables` 都是可选元数据，不写时不假定视角或初始变量。
+- `variables` 是可选的状态初始化元数据，不写时不假定初始变量；视角只在 `narrator.persona` 或场景正文中按项目需要定义。
 - 使用 `variables` 时，其键必须是已声明的 dimension ID。
 - Agent 构建把 `<agent_state_init>` 放入默认折叠的 `<details>`。
 - 非 Agent 构建生成 legacy 初始化块。
@@ -139,7 +140,7 @@ python scripts/generate.py projects/<project-id>
 
 ### Agent
 
-- 导入角色卡、全部随项目打包的 `.ttskill` 和 Agent Profile；Skill 安装名为 `<project-id>-<skill-id>`，不同项目可共存。
+- 先导入角色卡；导入随项目打包的 `.ttskill` 时，把目标作用域设为该角色卡；最后导入 Agent Profile。Skill 安装名为 `<project-id>-<skill-id>`，不同项目可共存。
 - Profile 必须启用 workspace 提交工具；骰子由 `agent.enable_dice` 控制。
 - 声明状态维度时，每轮读取项目专属 `state-system`，只更新有当前轮证据的角色和维度；`dimensions: []` 时跳过。
 - 启用角色状态时保存到 `persist/character_states.json`。
@@ -168,8 +169,9 @@ description: 简短说明
 ```
 
 - `name` 使用小写字母、数字、`-` 或 `_`。
-- 配置中的 Skill ID 必须与 frontmatter `name` 一致。
+- 配置中的 Skill ID 不得重复，并且必须与 frontmatter `name` 一致。
 - 打包时自动将安装名改为 `<project-id>-<skill-id>`；源目录继续使用配置中的原始 Skill ID。
+- 生成的角色卡通过模板扩展字段声明 `skillInstallScope: character` 和项目化安装名；这是导入清单，不是 Agent Prompt 权限或运行时白名单。
 - 大型资料放入 `references/`，运行时资源放入 `assets/`。
 
 ## 模板更新
@@ -197,9 +199,9 @@ node --check extensions/interaction-runtime/index.js
 |---|---|
 | 找不到配置 | 项目根目录是否存在 `tauritavern.yaml` |
 | 框架版本不匹配 | 检查迁移后更新项目 `framework.version` |
-| Agent 不读状态 Skill | 是否导入最新的 `<project-id>-state-system.ttskill` |
+| Agent 不读状态 Skill | 是否把最新的 `<project-id>-state-system.ttskill` 导入当前角色卡的角色作用域 |
 | Agent 不发布正文 | Profile 是否启用 workspace commit |
-| 点击行动无效 | 是否安装通用生成扩展并导入 `<project-id>-interaction-system.ttskill` |
+| 点击行动无效 | 是否安装通用生成扩展，并把 `<project-id>-interaction-system.ttskill` 导入当前角色卡的角色作用域 |
 | 地图不能点击 | SVG `data-region-id` 是否匹配 `regions.json` |
 | 非 Agent 状态不保存 | 是否安装 legacy 状态运行时 |
 | 世界书未生效 | 检查关键词、递归、绑定和激活状态 |

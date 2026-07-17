@@ -75,7 +75,10 @@ class HongloumengProjectTest(unittest.TestCase):
                 AgentGenerator(str(project), str(REPO_ROOT)).run()
 
             output = project / "output" / "agent"
-            self.assertIn(f"产物目录：{output}/", build_log.getvalue())
+            build_output = build_log.getvalue()
+            self.assertIn(f"产物目录：{output}/", build_output)
+            self.assertIn("把导入目标设为刚导入的角色卡", build_output)
+            self.assertIn("不要导入到全局、预设或 Profile 作用域", build_output)
             card = json.loads(
                 (output / "hongloumeng-garden.character-card.json")
                 .read_text(encoding="utf-8")
@@ -86,6 +89,19 @@ class HongloumengProjectTest(unittest.TestCase):
             )
 
             interaction_marker = card["data"]["extensions"]["tauritavern_interaction"]
+            skill_binding = card["data"]["extensions"][
+                "tauritavern_agent_template"
+            ]
+            self.assertEqual("character", skill_binding["skillInstallScope"])
+            self.assertEqual(
+                {
+                    "hongloumeng-garden-interaction-system",
+                    "hongloumeng-garden-state-system",
+                },
+                set(skill_binding["requiredSkills"]),
+            )
+            self.assertIn("目标作用域设为本角色卡", card["data"]["creator_notes"])
+            self.assertIn("不要安装到全局", card["data"]["creator_notes"])
             self.assertEqual("hongloumeng-garden", interaction_marker["projectId"])
             self.assertEqual(
                 "hongloumeng-garden-interaction-system",
@@ -106,8 +122,30 @@ class HongloumengProjectTest(unittest.TestCase):
                 "不先 list/search Skill",
                 card["data"]["post_history_instructions"],
             )
+            self.assertIn(
+                "使用 skill.read 读取",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "若该精确安装名不可见",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertNotIn("角色作用域", card["data"]["post_history_instructions"])
+            self.assertNotIn(
+                "全局、预设或 Profile 作用域",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "不是 Skill 白名单",
+                card["data"]["post_history_instructions"],
+            )
+            self.assertIn(
+                "其它由当前 run 解析且经 Profile 过滤后可见的 Skills 可按需正常使用",
+                card["data"]["post_history_instructions"],
+            )
             self.assertIsNone(profile["instructions"]["agentSystemPrompt"])
             self.assertEqual(["*"], profile["skills"]["visible"])
+            self.assertEqual([], profile["skills"]["deny"])
 
             extension = output / "extensions" / "tauritavern-interaction"
             self.assertTrue((extension / "manifest.json").exists())
@@ -116,6 +154,8 @@ class HongloumengProjectTest(unittest.TestCase):
             extension_code = (extension / "index.js").read_text(encoding="utf-8")
             self.assertNotIn("import config", extension_code)
             self.assertIn("activeCardConfig", extension_code)
+            self.assertIn("activeCharacterSkillScope", extension_code)
+            self.assertIn("readFile({ scope, name: skillName", extension_code)
             self.assertIn("JSON.parse", extension_code)
             self.assertNotIn("libs?.yaml", extension_code)
             self.assertNotIn("/send", extension_code)
@@ -154,6 +194,7 @@ class HongloumengProjectTest(unittest.TestCase):
                     "name: hongloumeng-garden-interaction-system", interaction_skill
                 )
                 self.assertIn("仅适用于《红楼梦·大观园》", interaction_skill)
+                self.assertNotIn("角色作用域", interaction_skill)
                 self.assertIn("不要先列 workspace 目录", interaction_skill)
                 self.assertIn("正常首轮", interaction_skill)
                 self.assertIn("<tt_interaction_input", interaction_skill)
@@ -183,6 +224,7 @@ class HongloumengProjectTest(unittest.TestCase):
             with zipfile.ZipFile(state_archive) as package:
                 state_skill = package.read("SKILL.md").decode("utf-8")
                 self.assertIn("name: hongloumeng-garden-state-system", state_skill)
+                self.assertNotIn("角色作用域", state_skill)
                 self.assertIn("不要先列目录", state_skill)
                 self.assertIn("workspace.write_file", state_skill)
                 self.assertIn("Agent 回合预算", state_skill)

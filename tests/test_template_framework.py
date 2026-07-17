@@ -134,6 +134,14 @@ class TemplateFrameworkTest(unittest.TestCase):
             generator.run()
             output = project / "output" / "agent"
             self.assertEqual([], list((output / "skills").glob("*.ttskill")))
+            card = json.loads(
+                (output / "my-card-writer.character-card.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertNotIn(
+                "tauritavern_agent_template", card["data"]["extensions"]
+            )
             profile = json.loads(
                 (output / "my-card-writer.agent-profile.json").read_text(
                     encoding="utf-8"
@@ -179,6 +187,76 @@ class TemplateFrameworkTest(unittest.TestCase):
             marker = card["data"]["extensions"]["tauritavern_interaction"]
             self.assertIsNone(marker["stateSkillName"])
             self.assertIsNone(marker["characterStateFile"])
+
+    def test_custom_skill_names_and_cross_references_are_project_scoped(self):
+        with tempfile.TemporaryDirectory(prefix="tauritavern-custom-skills-") as tmp:
+            project = Path(tmp)
+            (project / "tauritavern.yaml").write_text(
+                """schema_version: 1
+framework:
+  version: "2.7.0"
+project:
+  id: "custom-suite"
+  name: "Custom Suite"
+build:
+  target: "agent"
+dimensions: []
+interaction:
+  enabled: false
+narrator:
+  name: "Custom Suite"
+skills:
+  - id: "alpha"
+    source_dir: "skills/alpha"
+  - id: "beta"
+    source_dir: "skills/beta"
+""",
+                encoding="utf-8",
+            )
+            for skill_id, text in {
+                "alpha": "Alpha may read beta; alphabet remains unchanged.",
+                "beta": "Beta may read alpha.",
+            }.items():
+                skill_dir = project / "skills" / skill_id
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text(
+                    f"---\nname: {skill_id}\ndescription: Test {skill_id}\n---\n\n{text}\n",
+                    encoding="utf-8",
+                )
+
+            AgentGenerator(str(project), str(REPO_ROOT)).run()
+            output = project / "output" / "agent" / "skills"
+            with zipfile.ZipFile(output / "custom-suite-alpha.ttskill") as package:
+                alpha = package.read("SKILL.md").decode("utf-8")
+            with zipfile.ZipFile(output / "custom-suite-beta.ttskill") as package:
+                beta = package.read("SKILL.md").decode("utf-8")
+
+            self.assertIn("name: custom-suite-alpha", alpha)
+            self.assertIn("read custom-suite-beta", alpha)
+            self.assertIn("alphabet remains unchanged", alpha)
+            self.assertIn("name: custom-suite-beta", beta)
+            self.assertIn("read custom-suite-alpha", beta)
+
+    def test_duplicate_skill_ids_are_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="tauritavern-duplicate-skills-") as tmp:
+            project = Path(tmp)
+            config = (REPO_ROOT / "tauritavern.template.yaml").read_text(
+                encoding="utf-8"
+            ).replace(
+                '  - id: "interaction-system"\n    source_dir: "skills/interaction-system"',
+                '  - id: "state-system"\n    source_dir: "skills/state-system"',
+            )
+            config = config.replace("dimensions: []", """dimensions:
+  - id: "value"
+    name: "Value"
+    initial: 0
+    ranges: [0, 10]
+    stages: ["default"]""", 1)
+            (project / "tauritavern.yaml").write_text(config, encoding="utf-8")
+
+            generator = AgentGenerator(str(project), str(REPO_ROOT))
+            with self.assertRaisesRegex(ValueError, "Duplicate Skill id"):
+                generator.validate_skills()
 
     def test_stateless_non_agent_build_omits_state_worldbook(self):
         with tempfile.TemporaryDirectory(prefix="tauritavern-stateless-legacy-") as tmp:
