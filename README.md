@@ -16,6 +16,20 @@ Agent 构建遵循“扩展而非替代”：Profile 使用 `agentSystemPrompt: 
 
 具体作品统一放在 `projects/<project-id>/`。用户只修改项目子目录；根目录的生成器、通用 Skills、扩展运行时和默认主题保持由模板更新。根目录的 `tauritavern.template.yaml` 是新项目配置模板，可以参考 `projects/hongloumeng/` 创建完整项目目录。
 
+## 模板更新
+
+由本模板创建的下游仓库会每周检查 `WZzhaoyi/tauritavern-agent-template`，发现框架更新时创建 Pull Request，不会直接修改默认分支或自动合并。同步只处理框架拥有的文件，以下路径始终保留当前仓库版本：
+
+- `projects/`：具体项目配置、素材和项目专有代码。
+- `output/`：生成产物。
+- `.github/workflows/`：涉及仓库写权限，使用默认 `GITHUB_TOKEN` 时不自动同步。
+
+首次使用前，在下游仓库的 **Settings → Actions → General → Workflow permissions** 中允许 GitHub Actions 创建 Pull Request。也可以在 Actions 页手动运行 **Sync template**；手动触发默认是 dry-run，取消 `dry_run` 才会创建同步 PR。同步 PR 必须经过 CI 和人工审查后再合并。
+
+同步使用 `.github/.templatesyncignore` 保护项目目录，且不强制删除下游文件。工作流自身的逻辑更新需要人工同步；这样无需向模板同步任务授予 PAT 的 `workflow` 权限。工作流引用的 Actions 已固定到完整 commit SHA，并由 Dependabot 在每个仓库中独立创建依赖更新 PR。
+
+已有的下游仓库需要一次性复制 `.github/workflows/sync-template.yml`、`.github/.templatesyncignore` 和 `.github/dependabot.yml`，之后才能自动收到框架同步 PR。同步更新框架后，生成器会比较项目 `framework.version` 与根模板版本；不一致时停止构建，要求先检查迁移内容并显式更新项目配置。
+
 ## 快速开始
 
 ```bash

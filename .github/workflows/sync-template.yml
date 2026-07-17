@@ -1,0 +1,39 @@
+name: Sync template
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check for template updates without creating a pull request
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    if: github.repository != 'WZzhaoyi/tauritavern-agent-template'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Sync framework updates
+        uses: AndreasAugustin/actions-template-sync@8a0f668b83c32a0f673353086d74f12b8853d4f5 # v2.5.3
+        with:
+          source_repo_path: WZzhaoyi/tauritavern-agent-template
+          upstream_branch: main
+          pr_title: 'chore(template): sync upstream updates'
+          pr_body: 'Sync framework-owned files from WZzhaoyi/tauritavern-agent-template. Review the CI result before merging.'
+          pr_commit_msg: 'chore(template): sync upstream updates'
+          pr_labels: template-sync
+          template_sync_ignore_file_path: .github/.templatesyncignore
+          is_force_deletion: false
+          is_dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}

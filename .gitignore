@@ -6,7 +6,7 @@ output/skills/
 output/agent/
 output/non-agent/
 !output/.gitkeep
-examples/*/output/
+projects/*/output/
 
 # Python
 __pycache__/

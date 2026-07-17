@@ -7,6 +7,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from scripts.check_release import validate_release_tag
 from scripts.generate import AgentGenerator, ConfigLoader
 
 
@@ -14,6 +15,57 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TemplateFrameworkTest(unittest.TestCase):
+    def test_template_sync_preserves_project_owned_paths(self):
+        ignored = {
+            line.strip()
+            for line in (
+                REPO_ROOT / ".github" / ".templatesyncignore"
+            ).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        }
+        workflow = (
+            REPO_ROOT / ".github" / "workflows" / "sync-template.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertEqual(
+            {"projects/", "output/", ".github/workflows/"}, ignored
+        )
+        self.assertIn(
+            "source_repo_path: WZzhaoyi/tauritavern-agent-template", workflow
+        )
+        self.assertIn("is_force_deletion: false", workflow)
+
+    def test_release_workflow_tests_before_publishing(self):
+        workflow = (
+            REPO_ROOT / ".github" / "workflows" / "release.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("python scripts/check_release.py", workflow)
+        self.assertIn("needs: test", workflow)
+
+    def test_project_framework_version_must_match_template(self):
+        with tempfile.TemporaryDirectory(prefix="tauritavern-version-") as tmp:
+            project = Path(tmp)
+            config = (REPO_ROOT / "tauritavern.template.yaml").read_text(
+                encoding="utf-8"
+            )
+            (project / "tauritavern.yaml").write_text(
+                config.replace('version: "2.7.0"', 'version: "2.6.0"', 1),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "does not match template version"):
+                AgentGenerator(str(project), str(REPO_ROOT))
+
+    def test_release_tag_matches_framework_version(self):
+        config_path = REPO_ROOT / "tauritavern.template.yaml"
+
+        self.assertEqual("2.7.0", validate_release_tag("v2.7.0", config_path))
+        for invalid_tag in ("2.7.0", "v2.7", "v2.7.1", "v02.7.0"):
+            with self.subTest(tag=invalid_tag):
+                with self.assertRaises(ValueError):
+                    validate_release_tag(invalid_tag, config_path)
+
     def test_agents_guide_is_not_a_config_source(self):
         with tempfile.TemporaryDirectory(prefix="tauritavern-guide-") as tmp:
             project = Path(tmp)

@@ -61,6 +61,10 @@ class AgentGenerator:
         self.root = Path(project_root)
         self.template_root = Path(template_root) if template_root else self.root
         self.cfg = ConfigLoader.load(self.root)
+        self.framework_version = self._validate_framework_version(
+            self.cfg.get("framework"), "project"
+        )
+        self._check_template_framework_version()
 
         paths = self.cfg.get("paths", {})
         self.characters_dir = self.root / paths.get("characters_dir", "literature/characters")
@@ -88,6 +92,34 @@ class AgentGenerator:
         if project_path.exists() or self.template_root == self.root:
             return project_path
         return self.template_root / relative_path
+
+    @staticmethod
+    def _validate_framework_version(value: object, owner: str) -> str:
+        if not isinstance(value, dict):
+            raise ValueError(f"{owner} framework must be a mapping")
+        version = value.get("version")
+        if not isinstance(version, str) or not re.fullmatch(
+            r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", version
+        ):
+            raise ValueError(
+                f"{owner} framework.version must use MAJOR.MINOR.PATCH"
+            )
+        return version
+
+    def _check_template_framework_version(self) -> None:
+        template_config = self.template_root / "tauritavern.template.yaml"
+        if not template_config.exists():
+            return
+        template_cfg = ConfigLoader._load_yaml_file(template_config)
+        template_version = self._validate_framework_version(
+            template_cfg.get("framework"), "template"
+        )
+        if self.framework_version != template_version:
+            raise ValueError(
+                "project framework.version "
+                f"{self.framework_version!r} does not match template version "
+                f"{template_version!r}; review migrations before updating the project"
+            )
 
     @staticmethod
     def _validate_build_target(value: object) -> str:

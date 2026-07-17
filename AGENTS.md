@@ -205,6 +205,19 @@ python scripts/generate.py projects/hongloumeng
 
 Agent Profile 中 `agentSystemPrompt` 必须是 `null`，不是空字符串。TauriTavern 会依据实际可用工具和工作区生成默认 Agent 运行提示；本模板不复制这份提示。
 
+### 模板更新
+
+下游仓库通过 `.github/workflows/sync-template.yml` 每周检查源模板更新，只创建 PR，不直接推送或自动合并：
+
+- `.github/.templatesyncignore` 必须保护 `projects/`、`output/` 和 `.github/workflows/`。
+- 用户自定义内容只放在 `projects/`，不要修改根目录框架文件。
+- 手动触发同步默认执行 dry-run；明确取消 `dry_run` 后才创建 PR。
+- 同步 PR 必须通过 CI 并由用户检查后合并；配置 schema 变化时允许 CI 失败并要求人工迁移。
+- 默认 `GITHUB_TOKEN` 不负责同步工作流文件，避免引入 PAT 的额外权限和密钥维护。
+- 生成器要求项目 `framework.version` 与根模板版本一致；同步后不一致表示必须先检查迁移并显式更新项目配置。
+
+发布 tag 必须使用 `vMAJOR.MINOR.PATCH`，并与 `tauritavern.template.yaml` 的 `framework.version` 完全一致。Release 工作流会先执行版本检查、JavaScript 语法检查和完整测试，再创建 GitHub Release。
+
 ### 导入 Agent 目标
 
 1. Characters → Import → `output/agent/{project.id}.character-card.json`
