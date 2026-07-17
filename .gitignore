@@ -1,11 +1,4 @@
-# 输出文件（脚本生成，不纳入版本控制）
-output/*.json
-output/*.ttskill
-output/*.css
-output/skills/
-output/agent/
-output/non-agent/
-!output/.gitkeep
+# 项目输出（脚本生成，不纳入版本控制）
 projects/*/output/
 
 # Python

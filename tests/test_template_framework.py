@@ -1,10 +1,6 @@
-import contextlib
-import io
-import json
 import shutil
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 
 from scripts.check_release import validate_release_tag
@@ -27,9 +23,7 @@ class TemplateFrameworkTest(unittest.TestCase):
             REPO_ROOT / ".github" / "workflows" / "sync-template.yml"
         ).read_text(encoding="utf-8")
 
-        self.assertEqual(
-            {"projects/", "output/", ".github/workflows/"}, ignored
-        )
+        self.assertEqual({"projects/", ".github/workflows/"}, ignored)
         self.assertIn(
             "source_repo_path: WZzhaoyi/tauritavern-agent-template", workflow
         )
@@ -88,57 +82,38 @@ class TemplateFrameworkTest(unittest.TestCase):
             self.assertEqual("my-card-writer", config["project"]["id"])
             self.assertFalse((project / "AGENTS.md").exists())
 
-    def test_default_template_builds_generic_interaction_display(self):
+    def test_template_uses_conventional_project_layout(self):
         with tempfile.TemporaryDirectory(prefix="tauritavern-template-") as tmp:
             project = Path(tmp)
-            shutil.copy2(REPO_ROOT / "AGENTS.md", project / "AGENTS.md")
             shutil.copy2(
                 REPO_ROOT / "tauritavern.template.yaml",
                 project / "tauritavern.yaml",
             )
-            for directory in ("interaction", "literature"):
-                shutil.copytree(REPO_ROOT / directory, project / directory)
+            generator = AgentGenerator(str(project), str(REPO_ROOT))
+            config = ConfigLoader.load(project)
 
-            self.assertNotIn(
-                "```yaml", (project / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertNotIn("paths", config)
+            self.assertFalse(config["interaction"]["enabled"])
+            self.assertEqual(
+                project / "literature/characters", generator.characters_dir
+            )
+            self.assertEqual(
+                project / "literature/scenarios", generator.scenarios_dir
+            )
+            self.assertEqual(project / "output", generator.output_root)
+            self.assertEqual(
+                REPO_ROOT / "extensions/interaction-runtime",
+                generator._source_path("extensions/interaction-runtime"),
             )
 
-            with contextlib.redirect_stdout(io.StringIO()):
-                AgentGenerator(str(project), str(REPO_ROOT)).run()
+        for directory in ("literature", "interaction", "output"):
+            self.assertFalse((REPO_ROOT / directory).exists(), directory)
 
-            output = project / "output" / "agent"
-            extension = output / "extensions" / "my-card-writer-interaction"
-            config = (extension / "package-config.js").read_text(encoding="utf-8")
-            runtime = (extension / "index.js").read_text(encoding="utf-8")
-            styles = (extension / "style.css").read_text(encoding="utf-8")
-            profile = json.loads(
-                (output / "my-card-writer.agent-profile.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-
-            self.assertIn('"projectId": "my-card-writer"', config)
-            self.assertIn('"narrativeFile": "output/main.md"', config)
-            self.assertIn(
-                '"characterStateFile": "persist/character_states.json"', config
-            )
-            self.assertIn("hydrateFromLatestRun", runtime)
-            self.assertIn("renderNarrative", runtime)
-            self.assertIn("renderBriefing", runtime)
-            self.assertIn("waifuMode", runtime)
-            self.assertIn("data-vn-mode", styles)
-            self.assertIn("tt-interaction-progress", styles)
-            self.assertNotIn("hongloumeng", runtime.lower())
-            self.assertNotIn("红楼梦", runtime)
-            self.assertIsNone(profile["instructions"]["agentSystemPrompt"])
-            self.assertEqual(["*"], profile["skills"]["visible"])
-
-            with zipfile.ZipFile(
-                output / "skills" / "interaction-system.ttskill"
-            ) as package:
-                skill = package.read("SKILL.md").decode("utf-8")
-                self.assertIn("extensions.briefing", skill)
-                self.assertIn("persist/character_states.json", skill)
+        runtime = (
+            REPO_ROOT / "extensions" / "interaction-runtime" / "index.js"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("hongloumeng", runtime.lower())
+        self.assertNotIn("红楼梦", runtime)
 
 
 if __name__ == "__main__":

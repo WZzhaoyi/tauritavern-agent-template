@@ -4,12 +4,12 @@
 
 ## 项目维护指南
 
-- 构建配置只维护在 `tauritavern.yaml`，不要复制根目录模板配置。
+- 构建配置只修改本目录的 `tauritavern.yaml`，不要修改根目录配置模板。
 - 人物、地点与关系事实以 `lorebooks/` 为准；状态阶段表现以 `literature/characters/` 为准。
 - 地图中的 `data-region-id` 必须与 `interaction/regions.json` 的区域 ID 一致。
 - 场景保持第三人称、含蓄克制，不默认玩家身份为贾宝玉。
-- 本项目只维护作品素材；通用 Skills、交互扩展和主题从模板框架继承。
+- 本项目只维护作品配置与素材；通用 Skills、交互扩展和主题从模板框架继承。
 
-## 3. 项目说明
+## 验证
 
 运行测试时，仓库的通用 `skills/`、`extensions/` 和 `theme/` 会与本目录素材组合到临时目录中，再执行真实生成器。

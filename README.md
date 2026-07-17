@@ -57,6 +57,9 @@ projects/<project-id>/
 │   └── fanfic/
 ├── lorebooks/
 ├── interaction/
+├── skills/           # 可选项目 Skill 或覆盖
+├── extensions/       # 可选项目扩展覆盖
+├── theme/            # 可选项目主题覆盖
 └── output/
 ```
 
@@ -66,6 +69,7 @@ projects/<project-id>/
 - `literature/scenarios/`：首条消息和备选开场。
 - `lorebooks/`：角色、地点、关系和世界事实。
 - `interaction/`：行动、区域和可选 SVG 地图。
+- `skills/`、`extensions/`、`theme/`：仅在项目需要独有能力时使用；默认继承根目录通用资源。
 
 配置字段和默认值见 [tauritavern.template.yaml](tauritavern.template.yaml)，完整创作约束见 [AGENTS.md](AGENTS.md)。
 
@@ -73,7 +77,7 @@ projects/<project-id>/
 
 下游仓库每周检查源模板并创建同步 PR，不自动合并。首次使用前需在 GitHub 的 **Settings → Actions → General → Workflow permissions** 中允许 Actions 创建 Pull Request。
 
-- `projects/`、`output/` 和 `.github/workflows/` 不参与模板同步。
+- `projects/` 和 `.github/workflows/` 不参与模板同步。
 - 手动运行 **Sync template** 时默认是 dry-run。
 - 同步后项目 `framework.version` 必须与模板一致。
 - 已有下游仓库需一次性复制同步工作流、`.templatesyncignore` 和 Dependabot 配置。

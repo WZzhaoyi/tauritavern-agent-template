@@ -28,10 +28,13 @@ projects/<project-id>/         项目维护
 ├── literature/                阶段资料、场景、风格样本
 ├── lorebooks/                 世界书
 ├── interaction/               行动、区域、地图
+├── skills/                    可选项目 Skill 或覆盖
+├── extensions/                可选项目专用扩展
+├── theme/                     可选项目主题覆盖
 └── output/                    生成产物
 ```
 
-项目缺少通用 Skill、扩展运行时或主题时，生成器从模板根目录读取。项目专有能力应新增为独立 Skill 或扩展，避免复制后修改通用实现。
+项目缺少通用 Skill、扩展运行时或主题时，生成器从模板根目录读取。项目规则优先使用配置和声明式素材；只有确实需要独有运行逻辑时才覆盖扩展。
 
 ## 工作步骤
 
@@ -50,6 +53,7 @@ projects/<project-id>/         项目维护
 - `dimensions[].stages` 数量必须等于 `ranges` 长度减一。
 - `build.target` 只能是 `agent` 或 `non_agent`。
 - `interaction.enabled` 只影响 Agent 构建。
+- 素材和输出目录使用固定约定，不在配置中重定义路径。
 - `skills:` 只表示随套件打包的 Skills，不是运行时白名单。
 - Agent Profile 的 `agentSystemPrompt` 保持 `null`，`skills.visible` 保持 `["*"]`。
 
@@ -173,7 +177,7 @@ description: 简短说明
 ## 模板更新
 
 - 下游仓库每周检查模板更新并创建 PR，不自动合并。
-- `.github/.templatesyncignore` 必须保护 `projects/`、`output/` 和 `.github/workflows/`。
+- `.github/.templatesyncignore` 必须保护 `projects/` 和 `.github/workflows/`。
 - 手动运行 **Sync template** 默认是 dry-run。
 - 同步后先运行测试，再按需迁移项目并更新 `framework.version`。
 - 工作流逻辑不自动同步；Actions 版本由 Dependabot 更新。

@@ -66,12 +66,11 @@ class AgentGenerator:
         )
         self._check_template_framework_version()
 
-        paths = self.cfg.get("paths", {})
-        self.characters_dir = self.root / paths.get("characters_dir", "literature/characters")
-        self.scenarios_dir = self.root / paths.get("scenarios_dir", "literature/scenarios")
+        self.characters_dir = self.root / "literature/characters"
+        self.scenarios_dir = self.root / "literature/scenarios"
         self.interaction_dir = self.root / "interaction"
         self.lorebooks_dir = self.root / "lorebooks"
-        self.output_root = self.root / paths.get("output_dir", "output")
+        self.output_root = self.root / "output"
         self.build_target = self._validate_build_target(self.cfg.get("build", {}))
         target_dir = "agent" if self.build_target == "agent" else "non-agent"
         self.output_dir = self.output_root / target_dir
@@ -965,7 +964,7 @@ class AgentGenerator:
                 f"  {index}. {step}" for index, step in enumerate(extra_steps, start=5)
             )
             print(f"""
-  产物目录：output/agent/
+  产物目录：{self.output_dir}/
   1. Characters → Import → {self.project_id}.character-card.json
   2. Agent 系统面板 → SKILLS → 逐个导入 skills/*.ttskill
   3. Agent 系统面板 → 配置档案 → 导入 → {self.project_id}.agent-profile.json
@@ -974,7 +973,7 @@ class AgentGenerator:
 """)
         else:
             print(f"""
-  产物目录：output/non-agent/
+  产物目录：{self.output_dir}/
   1. Characters → Import → {self.project_id}.character-card.json
   2. World Info / Lorebooks → Import → {self.project_id}.state-worldbook.json
   3. 将状态世界书与角色卡/聊天绑定，保持 Agent Mode 关闭
@@ -988,10 +987,10 @@ class AgentGenerator:
 def main():
     script_dir = Path(__file__).resolve().parent
     template_root = script_dir.parent
-    if len(sys.argv) > 2:
-        print("Usage: python scripts/generate.py [project_root]", file=sys.stderr)
+    if len(sys.argv) != 2:
+        print("Usage: python scripts/generate.py <project_root>", file=sys.stderr)
         sys.exit(2)
-    project_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else template_root
+    project_root = Path(sys.argv[1]).resolve()
 
     try:
         AgentGenerator(str(project_root), str(template_root)).run()

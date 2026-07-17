@@ -30,11 +30,6 @@ build:
 interaction:
   enabled: true
 
-paths:
-  characters_dir: "literature/characters"
-  scenarios_dir: "literature/scenarios"
-  output_dir: "output"
-
 narrator:
   name: "红楼梦·大观园"
   creator: "TauriTavern Agent Template"

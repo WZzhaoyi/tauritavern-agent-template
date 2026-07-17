@@ -70,10 +70,12 @@ class HongloumengProjectTest(unittest.TestCase):
                 "```yaml", (project / "AGENTS.md").read_text(encoding="utf-8")
             )
 
-            with contextlib.redirect_stdout(io.StringIO()):
+            build_log = io.StringIO()
+            with contextlib.redirect_stdout(build_log):
                 AgentGenerator(str(project), str(REPO_ROOT)).run()
 
             output = project / "output" / "agent"
+            self.assertIn(f"产物目录：{output}/", build_log.getvalue())
             card = json.loads(
                 (output / "hongloumeng-garden.character-card.json")
                 .read_text(encoding="utf-8")
