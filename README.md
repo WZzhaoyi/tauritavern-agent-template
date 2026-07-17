@@ -33,17 +33,17 @@ python scripts/generate.py projects/<project-id>
 Agent 目标：
 
 1. 导入 `*.character-card.json`。
-2. 导入 `skills/*.ttskill`。
+2. 导入 `skills/*.ttskill`；安装名为 `<project-id>-<skill-id>`，可与其它项目共存。
 3. 导入并启用 `*.agent-profile.json`。
 4. 开启 Agent Mode。
-5. 如启用交互，按生成扩展目录中的 `README.md` 安装 UI Extension。
+5. 如启用交互，安装 `extensions/tauritavern-interaction/`；同一份通用扩展可服务多个项目。
 6. 导入并绑定 `lorebooks/` 中的世界书。
 
 非 Agent 目标：
 
-1. 导入角色卡和 `*.state-worldbook.json`。
-2. 绑定状态世界书，保持 Agent Mode 关闭。
-3. 如需自动保存状态，安装兼容 `_.set(...)` 的状态运行时；否则设置 `emit_legacy_updates: false`。
+1. 导入角色卡，保持 Agent Mode 关闭。
+2. 声明了状态维度时，再导入并绑定 `*.state-worldbook.json`。
+3. 需要自动保存状态时，安装兼容 `_.set(...)` 的状态运行时；否则设置 `emit_legacy_updates: false`。
 
 ## 项目内容
 
@@ -65,10 +65,10 @@ projects/<project-id>/
 
 - `AGENTS.md`：项目维护与创作指南。
 - `tauritavern.yaml`：构建配置。
-- `literature/characters/`：角色状态阶段资料。
+- `literature/characters/`：可选角色状态阶段资料。
 - `literature/scenarios/`：首条消息和备选开场。
 - `lorebooks/`：角色、地点、关系和世界事实。
-- `interaction/`：行动、区域和可选 SVG 地图。
+- `interaction/`：可选行动、区域和 SVG 地图。
 - `skills/`、`extensions/`、`theme/`：仅在项目需要独有能力时使用；默认继承根目录通用资源。
 
 配置字段和默认值见 [tauritavern.template.yaml](tauritavern.template.yaml)，完整创作约束见 [AGENTS.md](AGENTS.md)。

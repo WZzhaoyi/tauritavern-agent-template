@@ -38,6 +38,6 @@
 ## 运行要点
 
 - 地图元素的 `data-region-id` 必须对应 `regions.json` 中的区域 ID。
-- Agent 成功提交后，扩展读取 `output/main.md`、`persist/character_states.json` 和 `persist/interaction-state.json`。
+- Agent 成功提交后，扩展读取 `output/main.md` 和 `persist/interaction-state.json`；声明角色状态维度时再读取对应角色状态文件。
+- 预设行动与面板自由输入使用同一回合流程；自由输入支持 `Ctrl/Cmd+Enter` 提交。
 - 界面缓存只用于恢复展示，不替代 Agent workspace 中的权威文件。
-- 若聊天中仍出现可见的 `[交互行动]`，替换旧扩展和 Skill 后完全重启 TauriTavern。

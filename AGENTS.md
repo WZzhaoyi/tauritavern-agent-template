@@ -8,7 +8,7 @@
 - `AGENTS.md` 是项目指南，机器配置只放在项目的 `tauritavern.yaml`。
 - 根目录 `tauritavern.template.yaml` 是配置模板，不是可直接构建的项目配置。
 - 一次构建只选择 `agent` 或 `non_agent`；两种产物和状态存储不能混用。
-- 角色卡保存叙事身份、文学风格和扮演规则；世界书保存角色、地点、关系与世界事实。
+- 角色卡保存创作身份、输出风格和扮演规则；世界书保存角色、地点、关系与世界事实。
 - 生成产物不得作为创作源文件修改。
 
 ## 目录所有权
@@ -50,7 +50,7 @@ projects/<project-id>/         项目维护
 - `schema_version` 当前为 `1`。
 - `framework.version` 必须与根模板一致。
 - `project.id` 只能使用小写 ASCII 字母、数字、`-` 和 `_`。
-- `dimensions[].stages` 数量必须等于 `ranges` 长度减一。
+- `dimensions` 可为空；定义维度时，`stages` 数量必须等于 `ranges` 长度减一。
 - `build.target` 只能是 `agent` 或 `non_agent`。
 - `interaction.enabled` 只影响 Agent 构建。
 - 素材和输出目录使用固定约定，不在配置中重定义路径。
@@ -122,7 +122,7 @@ description: 一句话描述
 - `interaction/regions.json`：地点和区域。
 - `interaction/map.svg`：可选地图；可点击元素的 `data-region-id` 必须匹配区域 ID。
 
-普通文字输入始终有效。项目规则放在配置、世界书或项目 Skill 中，不写入通用扩展 JavaScript。
+普通聊天输入和交互面板中的自定义行动输入始终有效。项目规则放在配置、世界书或项目 Skill 中，不写入通用扩展 JavaScript。
 
 ### 5. 构建
 
@@ -150,7 +150,7 @@ python scripts/generate.py projects/<project-id>
 
 ### Non-Agent
 
-- 导入角色卡和状态世界书，保持 Agent Mode 关闭。
+- 导入角色卡并保持 Agent Mode 关闭；只有声明状态维度时才导入状态世界书。
 - `emit_legacy_updates: true` 只生成 `_.set(...)`，仍需兼容运行时执行。
 - 未安装运行时时设置为 `false`，或手动维护状态。
 
@@ -169,6 +169,7 @@ description: 简短说明
 
 - `name` 使用小写字母、数字、`-` 或 `_`。
 - 配置中的 Skill ID 必须与 frontmatter `name` 一致。
+- 打包时自动将安装名改为 `<project-id>-<skill-id>`；源目录继续使用配置中的原始 Skill ID。
 - 大型资料放入 `references/`，运行时资源放入 `assets/`。
 
 ## 模板更新

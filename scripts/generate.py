@@ -6,7 +6,7 @@ TauriTavern Agent 生成器
 
 按 build.target 生成互斥的运行目标产物：
   - agent     → Agent Profile + SKILLS + Agent 角色卡 + 可选交互扩展 + 主题
-  - non_agent → 传统状态世界书 + legacy 角色卡
+  - non_agent → legacy 角色卡 + 可选状态世界书
 """
 
 import html
