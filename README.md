@@ -1,122 +1,102 @@
 # TauriTavern Agent 角色卡套件模板
 
-基于 [TauriTavern](https://tauritavern.github.io/) 的角色卡套件构建模板，适用于同人小说、互动叙事和多角色扮演项目。它从同一份创作源数据生成 Agent 或非 Agent 目标产物。
-
-角色卡承载文学与扮演指南；传统世界书承载可复用角色、设定和背景。`build.target` 决定状态资料被编译到 Skill 还是传统状态世界书，两种构建生成不同的角色卡，不将一份产物同时兼容两种运行时。
-
-套件作者可在 `dimensions[].update_rules` 与 `state_system.custom_rules` 中定义自己的数值规则。
-
-Agent 构建遵循“扩展而非替代”：Profile 使用 `agentSystemPrompt: null` 继承 TauriTavern 按工具动态生成的默认运行协议；`skills.visible: ["*"]` 保留用户本地 Skills。角色卡只加入状态与可选交互工作流的桥接说明，具体规则仍由 Skills、角色卡和世界书共同提供。
-
-可选的暂停式交互层提供地图、行动、剧情正文和只读状态简报。普通布局使用全屏舞台；SillyTavern 视觉小说模式下自动停靠到上方舞台并保留下方聊天区。普通文字输入始终可用。模板只提供最低互操作协议，不预设题材、资源体系或胜负规则。
-
-## 从模板创建项目
-
-在 GitHub 仓库页面选择 **Use this template → Create a new repository**，然后克隆新仓库。也可以直接复制本仓库并删除原有 Git 历史。
+从同一份创作源数据构建 Agent 或非 Agent 角色卡套件。具体作品统一放在 `projects/<project-id>/`，根目录保留模板代码和通用资源。
 
 ## 快速开始
+
+环境要求：Python 3.11。
 
 ```bash
 pip install -r requirements.txt
 ```
 
-生成器使用 Python 3.11 测试；运行时资源全部为 JSON、SVG、JavaScript 和 CSS。Python 侧仅使用 `PyYAML` 读取 `AGENTS.md` 配置块和场景 Markdown frontmatter。
-
-1. 编辑 `AGENTS.md` 第 2 节配置区，设置 `build.target: "agent"` 或 `"non_agent"`，并填入作品与状态配置；Agent 目标可用 `interaction.enabled` 开关点击交互
-2. 将文学与扮演指南写入角色卡；将角色、设定和背景维护在传统世界书
-3. 在 `literature/characters/` 下创建状态阶段资料，在 `literature/scenarios/` 下创建开场剧本
-4. 运行生成脚本：
+1. 参考 `projects/hongloumeng/` 创建项目目录。
+2. 将 `tauritavern.template.yaml` 复制为项目中的 `tauritavern.yaml` 并填写配置。
+3. 编辑项目的 `AGENTS.md`、`literature/`、`lorebooks/` 和 `interaction/`。
+4. 构建：
 
 ```bash
-python scripts/generate.py
+python scripts/generate.py projects/<project-id>
 ```
 
-5. 导入目标目录中的产物：
+产物位于项目自己的 `output/`：
 
-| 目标 | 输出 |
-|------|------|
-| `agent` | `output/agent/` 下的角色卡、Agent Profile、SKILLS、可选交互扩展和主题 |
-| `non_agent` | `output/non-agent/` 下的 legacy 角色卡和状态世界书 |
+| `build.target` | 输出目录 | 主要产物 |
+|---|---|---|
+| `agent` | `output/agent/` | 角色卡、Agent Profile、Skills、可选交互扩展 |
+| `non_agent` | `output/non-agent/` | 角色卡、状态世界书 |
 
-6. Agent 目标需将 Profile 设为 Active Profile 并开启 Agent Mode；非 Agent 目标需导入并绑定状态世界书，保持 Agent Mode 关闭
+两种目标的运行时状态互不兼容，不要在同一聊天中直接互换。
 
-启用交互后，还需按 `output/agent/extensions/{project.id}-interaction/README.md` 安装 UI Extension。官方当前不提供随角色卡或 Skill 自动安装第三方扩展的公开 API，因此这一步保留用户确认；不安装扩展不会影响普通文字 Agent 使用。
+## 导入
 
-## 暂停式交互
+Agent 目标：
 
-套件作者通常只需要编辑：
+1. 导入 `*.character-card.json`。
+2. 导入 `skills/*.ttskill`。
+3. 导入并启用 `*.agent-profile.json`。
+4. 开启 Agent Mode。
+5. 如启用交互，按生成扩展目录中的 `README.md` 安装 UI Extension。
+6. 导入并绑定 `lorebooks/` 中的世界书。
+
+非 Agent 目标：
+
+1. 导入角色卡和 `*.state-worldbook.json`。
+2. 绑定状态世界书，保持 Agent Mode 关闭。
+3. 如需自动保存状态，安装兼容 `_.set(...)` 的状态运行时；否则设置 `emit_legacy_updates: false`。
+
+## 项目内容
 
 ```text
-interaction/
-├── actions.json    # 基础行动；Agent 可在每轮状态中动态覆盖
-├── regions.json    # 地点与区域
-└── map.svg         # 可选地图，使用 data-region-id 标记点击区域
+projects/<project-id>/
+├── AGENTS.md
+├── tauritavern.yaml
+├── literature/
+│   ├── characters/
+│   ├── scenarios/
+│   └── fanfic/
+├── lorebooks/
+├── interaction/
+├── skills/           # 可选项目 Skill 或覆盖
+├── extensions/       # 可选项目扩展覆盖
+├── theme/            # 可选项目主题覆盖
+└── output/
 ```
 
-点击行动后，扩展通过官方 Agent Host API 直接启动回合，不会在聊天中留下可见的控制协议，也不需要再点发送按钮。Agent 成功提交后，界面从 `output/main.md`、`persist/character_states.json` 和 `persist/interaction-state.json` 刷新剧情、角色数值和交互状态。交互资源与持久状态均使用 JSON，前端不依赖外部 YAML 解析器。
+- `AGENTS.md`：项目维护与创作指南。
+- `tauritavern.yaml`：构建配置。
+- `literature/characters/`：角色状态阶段资料。
+- `literature/scenarios/`：首条消息和备选开场。
+- `lorebooks/`：角色、地点、关系和世界事实。
+- `interaction/`：行动、区域和可选 SVG 地图。
+- `skills/`、`extensions/`、`theme/`：仅在项目需要独有能力时使用；默认继承根目录通用资源。
 
-## 示例与测试
+配置字段和默认值见 [tauritavern.template.yaml](tauritavern.template.yaml)，完整创作约束见 [AGENTS.md](AGENTS.md)。
 
-[《红楼梦》大观园最小示例](examples/hongloumeng/README.md)提供四个地点、四名必要人物、五项基础行动、一个开场和一份最小世界书。它不会进入默认生成产物，同时也是跨文件一致性和真实 Agent 构建测试：
+## 模板更新
+
+下游仓库每周检查源模板并创建同步 PR，不自动合并。首次使用前需在 GitHub 的 **Settings → Actions → General → Workflow permissions** 中允许 Actions 创建 Pull Request。
+
+- `projects/` 和 `.github/workflows/` 不参与模板同步。
+- 手动运行 **Sync template** 时默认是 dry-run。
+- 同步后项目 `framework.version` 必须与模板一致。
+- 已有下游仓库需一次性复制同步工作流、`.templatesyncignore` 和 Dependabot 配置。
+
+## 测试与发布
 
 ```bash
-python scripts/generate.py examples/hongloumeng
 python -m unittest discover -s tests -v
+node --check extensions/interaction-runtime/index.js
 ```
 
-测试会构建默认模板和《红楼梦》示例，校验 SVG 区域、角色阶段资料、世界书与生成产物的一致性，并防止通用运行时意外引入示例专有内容。
-
-## 构建目标
-
-| 目标 | 状态资料 | 更新方式 |
-|------|---------|---------|
-| `agent` | `_stages.json` 进入 `state-system.ttskill` | LLM 验证增量后写入 `persist/character_states.json` |
-| `non_agent` | `_stages.json` 进入 `{project.id}.state-worldbook.json` | 角色卡输出 `_.set(...)`，由兼容状态脚本保存 |
-
-未安装非 Agent 状态脚本时，角色卡和世界书仍能正常使用，但数值不会自动持久化。若不需要兼容输出，可将 `state_system.non_agent.emit_legacy_updates` 设为 `false`。
-
-需要沿用原模板的自动状态运行时，可安装 `https://github.com/n0vi028/JS-Slash-Runner`，并启用 `import 'https://testingcf.jsdelivr.net/gh/WZzhaoyi/tavern_helper/dist/角色状态管理/index.js'`。这属于非 Agent 兼容依赖，不会被本模板打包。
-
-Agent `persist/` 与 legacy 状态脚本是两个独立存储。共用源数据不等于产物或聊天进度可直接互换。
-
-`AGENTS.md` 中的 `skills:` 清单只用于打包本项目随套件分发的 `.ttskill`，不是 Profile 的运行时白名单。
-
-## 项目结构
-
-```
-├── AGENTS.md         # 配置中心与完整文档
-├── literature/       # 状态阶段资料、场景剧本、角色卡风格参考
-├── lorebooks/        # 可选的传统世界书
-├── skills/           # 状态与可选交互协议 Skills
-├── interaction/      # 作者维护的声明式地图、区域和行动
-├── extensions/       # 通用交互 UI 运行时
-├── examples/         # 不进入默认产物的完整创作示例
-├── tests/            # 示例构建与跨文件一致性测试
-├── theme/            # 前端美化 CSS（可选）
-├── scripts/          # 生成脚本
-└── output/
-    ├── agent/        # Agent 目标产物
-    └── non-agent/    # 非 Agent 目标产物
-```
-
-## 详细文档
-
-完整的配置说明、工作流步骤和文件格式规范，请参阅 [AGENTS.md](AGENTS.md)。
-
-Agent 目标需要所选 LLM API 稳定支持原生工具调用。状态只根据当前回合的明确证据更新；数值证据不足时保持不变。
-
-交互界面会在 SillyTavern 视觉小说模式下自动停靠到上方舞台，保留下方聊天区。成功提交的 `output/main.md` 可直接在舞台中阅读；角色数值按维度显示为只读进度条，其它作者简报变量显示为文字或进度条。所有展示均来自成功 Agent run 与聊天级缓存，不创建第二套权威状态。
+发布 tag 必须为 `vMAJOR.MINOR.PATCH`，并与模板中的 `framework.version` 一致。Release 会在测试通过后创建。
 
 ## 参考
 
-- [TauriTavern 官网](https://tauritavern.github.io/)
-- [Agent 系统架构](https://tauritavern.github.io/architecture/agent.html)
-- [Agent Profile 配置档案](https://tauritavern.github.io/agent/profiles.html)
-- [SKILLS 知识包](https://tauritavern.github.io/agent/skills.html)
-- [创作者适配指南](https://tauritavern.github.io/agent/creator-guide.html)
-- [Agent API](https://tauritavern.github.io/api/agent.html)
-- [Skill API](https://tauritavern.github.io/api/skill.html)
-- [扩展作者指南](https://tauritavern.github.io/agent/extension-authors.html)
+- [TauriTavern](https://tauritavern.github.io/)
+- [Agent 创作者指南](https://tauritavern.github.io/agent/creator-guide.html)
+- [Agent Profile](https://tauritavern.github.io/agent/profiles.html)
+- [Skills](https://tauritavern.github.io/agent/skills.html)
 
 ## 许可证
 

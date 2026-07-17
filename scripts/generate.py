@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 TauriTavern Agent 生成器
-版本: 2.6.0
+版本: 2.7.0
 
 按 build.target 生成互斥的运行目标产物：
   - agent     → Agent Profile + SKILLS + Agent 角色卡 + 可选交互扩展 + 主题
@@ -22,24 +22,38 @@ from typing import List, Optional
 
 
 class ConfigLoader:
-    """从 AGENTS.md 提取 YAML 配置块。"""
+    """读取独立项目配置。"""
+
+    CONFIG_FILENAME = "tauritavern.yaml"
+    SUPPORTED_SCHEMA_VERSION = 1
+
+    @classmethod
+    def load(cls, project_root: Path) -> dict:
+        config_file = project_root / cls.CONFIG_FILENAME
+        if not config_file.exists():
+            raise FileNotFoundError(f"{cls.CONFIG_FILENAME} not found")
+
+        config = cls._load_yaml_file(config_file)
+        schema_version = config.get("schema_version")
+        if (
+            isinstance(schema_version, bool)
+            or schema_version != cls.SUPPORTED_SCHEMA_VERSION
+        ):
+            raise ValueError(
+                f"{cls.CONFIG_FILENAME} schema_version must be "
+                f"{cls.SUPPORTED_SCHEMA_VERSION}"
+            )
+        return config
 
     @staticmethod
-    def load(project_root: Path) -> dict:
-        agents_file = project_root / "AGENTS.md"
-        if not agents_file.exists():
-            raise FileNotFoundError("AGENTS.md not found")
-
-        text = agents_file.read_text(encoding="utf-8")
-        pattern = r"##\s*2\.\s*配置区.*?^```yaml\s*\n(.*?)^```\s*(?:---\s*)?##\s*3\."
-        m = re.search(pattern, text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
-        if not m:
-            raise ValueError("Cannot find YAML config block in AGENTS.md")
-
+    def _load_yaml_file(path: Path) -> dict:
         try:
-            return yaml.safe_load(m.group(1)) or {}
+            config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         except yaml.YAMLError as e:
-            raise ValueError(f"YAML parse error: {e}")
+            raise ValueError(f"YAML parse error in {path.name}: {e}")
+        if not isinstance(config, dict):
+            raise ValueError(f"{path.name} must contain a YAML mapping")
+        return config
 
 
 class AgentGenerator:
@@ -47,13 +61,16 @@ class AgentGenerator:
         self.root = Path(project_root)
         self.template_root = Path(template_root) if template_root else self.root
         self.cfg = ConfigLoader.load(self.root)
+        self.framework_version = self._validate_framework_version(
+            self.cfg.get("framework"), "project"
+        )
+        self._check_template_framework_version()
 
-        paths = self.cfg.get("paths", {})
-        self.characters_dir = self.root / paths.get("characters_dir", "literature/characters")
-        self.scenarios_dir = self.root / paths.get("scenarios_dir", "literature/scenarios")
+        self.characters_dir = self.root / "literature/characters"
+        self.scenarios_dir = self.root / "literature/scenarios"
         self.interaction_dir = self.root / "interaction"
         self.lorebooks_dir = self.root / "lorebooks"
-        self.output_root = self.root / paths.get("output_dir", "output")
+        self.output_root = self.root / "output"
         self.build_target = self._validate_build_target(self.cfg.get("build", {}))
         target_dir = "agent" if self.build_target == "agent" else "non-agent"
         self.output_dir = self.output_root / target_dir
@@ -69,11 +86,39 @@ class AgentGenerator:
         )
 
     def _source_path(self, relative_path: str) -> Path:
-        """项目可覆盖模板资源；示例缺省时回退到模板仓库。"""
+        """项目可覆盖模板资源；具体项目缺省时回退到模板仓库。"""
         project_path = self.root / relative_path
         if project_path.exists() or self.template_root == self.root:
             return project_path
         return self.template_root / relative_path
+
+    @staticmethod
+    def _validate_framework_version(value: object, owner: str) -> str:
+        if not isinstance(value, dict):
+            raise ValueError(f"{owner} framework must be a mapping")
+        version = value.get("version")
+        if not isinstance(version, str) or not re.fullmatch(
+            r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", version
+        ):
+            raise ValueError(
+                f"{owner} framework.version must use MAJOR.MINOR.PATCH"
+            )
+        return version
+
+    def _check_template_framework_version(self) -> None:
+        template_config = self.template_root / "tauritavern.template.yaml"
+        if not template_config.exists():
+            return
+        template_cfg = ConfigLoader._load_yaml_file(template_config)
+        template_version = self._validate_framework_version(
+            template_cfg.get("framework"), "template"
+        )
+        if self.framework_version != template_version:
+            raise ValueError(
+                "project framework.version "
+                f"{self.framework_version!r} does not match template version "
+                f"{template_version!r}; review migrations before updating the project"
+            )
 
     @staticmethod
     def _validate_build_target(value: object) -> str:
@@ -812,7 +857,7 @@ class AgentGenerator:
         return str(destination)
 
     def copy_project_lorebooks(self) -> List[str]:
-        """原样复制作者维护的传统世界书，方便示例与套件一起分发。"""
+        """原样复制作者维护的传统世界书，方便具体项目与套件一起分发。"""
         if not self.lorebooks_dir.exists():
             return []
         sources = sorted(self.lorebooks_dir.glob("*.json"))
@@ -919,7 +964,7 @@ class AgentGenerator:
                 f"  {index}. {step}" for index, step in enumerate(extra_steps, start=5)
             )
             print(f"""
-  产物目录：output/agent/
+  产物目录：{self.output_dir}/
   1. Characters → Import → {self.project_id}.character-card.json
   2. Agent 系统面板 → SKILLS → 逐个导入 skills/*.ttskill
   3. Agent 系统面板 → 配置档案 → 导入 → {self.project_id}.agent-profile.json
@@ -928,7 +973,7 @@ class AgentGenerator:
 """)
         else:
             print(f"""
-  产物目录：output/non-agent/
+  产物目录：{self.output_dir}/
   1. Characters → Import → {self.project_id}.character-card.json
   2. World Info / Lorebooks → Import → {self.project_id}.state-worldbook.json
   3. 将状态世界书与角色卡/聊天绑定，保持 Agent Mode 关闭
@@ -942,10 +987,10 @@ class AgentGenerator:
 def main():
     script_dir = Path(__file__).resolve().parent
     template_root = script_dir.parent
-    if len(sys.argv) > 2:
-        print("Usage: python scripts/generate.py [project_root]", file=sys.stderr)
+    if len(sys.argv) != 2:
+        print("Usage: python scripts/generate.py <project_root>", file=sys.stderr)
         sys.exit(2)
-    project_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else template_root
+    project_root = Path(sys.argv[1]).resolve()
 
     try:
         AgentGenerator(str(project_root), str(template_root)).run()

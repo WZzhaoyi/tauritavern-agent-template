@@ -1,15 +1,13 @@
-# 《红楼梦》大观园交互示例
+schema_version: 1
 
-这个示例只用于验证模板的最小创作闭环：四个地点、四名必要人物、一个状态维度和一个开场。完整项目规范仍以仓库根目录的 `AGENTS.md` 为准。
+framework:
+  version: "2.7.0"
 
-## 2. 配置区
-
-```yaml
 project:
   id: "hongloumeng-garden"
   name: "红楼梦·大观园"
   version: "1.0.0"
-  description: "以大观园诗社前夕为背景的暂停式角色互动示例。"
+  description: "以大观园诗社前夕为背景的暂停式角色互动项目。"
 
 dimensions:
   - id: "closeness"
@@ -31,11 +29,6 @@ build:
 
 interaction:
   enabled: true
-
-paths:
-  characters_dir: "literature/characters"
-  scenarios_dir: "literature/scenarios"
-  output_dir: "output"
 
 narrator:
   name: "红楼梦·大观园"
@@ -81,8 +74,3 @@ skills:
 
 theme:
   source_file: "theme/agent-overrides.css"
-```
-
-## 3. 示例说明
-
-运行测试时，仓库的通用 `skills/`、`extensions/` 和 `theme/` 会与本目录素材组合到临时项目中，再执行真实生成器。

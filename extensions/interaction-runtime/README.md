@@ -1,34 +1,43 @@
 # 暂停式交互扩展
 
-这是 `scripts/generate.py` 为当前角色卡套件生成的可选 UI 扩展。它不会替代 TauriTavern Agent、角色卡、世界书或用户的其他 Skills。
+本说明随通用 UI 运行时一起复制：
+
+- 根目录 `extensions/interaction-runtime/` 是框架源码。
+- `projects/<project-id>/output/agent/extensions/<project-id>-interaction/` 是注入项目配置后的可安装扩展。
+
+请只安装生成后的扩展，不要直接安装或修改根目录模板。重新构建会覆盖生成目录。
 
 ## 安装
 
-TauriTavern 当前没有把第三方 UI Extension 嵌入角色卡或 `.ttskill` 的公开安装 API，因此交互扩展需要单独安装：
+1. 构建项目：
 
-1. 开发或本地使用时，将整个扩展目录复制到当前用户的 SillyTavern/TauriTavern extensions 目录。
-2. 套件发布时，建议把此目录作为一个独立 Git 仓库发布，再通过 Extensions → Install Extension 安装该仓库 URL。
-3. 同时导入角色卡、Agent Profile 和 `skills/interaction-system.ttskill`。
+   ```bash
+   python scripts/generate.py projects/<project-id>
+   ```
 
-安装后，只有带有当前 `projectId` 标记的角色卡会显示“行动”按钮。
+2. 将生成的扩展目录复制到 SillyTavern/TauriTavern 扩展目录；发布时也可以把该目录作为独立 Git 仓库安装。
+3. 同时导入项目生成的角色卡、Agent Profile 和 `skills/interaction-system.ttskill`。
 
-安装后的悬浮入口会打开地图/行动界面：普通布局使用全屏舞台；SillyTavern 视觉小说模式开启时自动停靠到上方约 60% 舞台，保留下方原生聊天区。点击行动后，扩展通过 Agent Host API 的隐式 `quiet_prompt` 传入私有 `<tt_interaction_input>`，并直接启动后台回合。控制协议不会出现在聊天正文或 Agent 中间过程，也不需要再点聊天的发送按钮。扩展会显示运行阶段和耗时，并检查 Agent 是否真正发布了剧情。
+只有带有对应 `projectId` 标记的角色卡会显示交互入口。普通文字输入始终可用。
 
-Agent commit 后，扩展通过只读 Host API 显示 `output/main.md`，正文仍同时进入聊天历史。角色数值从 `persist/character_states.json` 按维度显示为只读进度条；`persist/interaction-state.json` 中其它 `extensions.briefing` 数值显示为进度条，文字、布尔和数组显示为文本。展示缓存只用于恢复界面，不替代 Agent workspace 中的权威文件。
+## 项目自定义
 
-如果仍看到可见的 `[交互行动]`，表示它来自旧聊天历史或旧版扩展。请替换整个扩展目录、重新导入 `interaction-system.ttskill`，并完全重启 TauriTavern。新 Skill 会将历史中的旧协议视为已发生行动，不在本轮重放。
+在项目源目录维护声明式内容：
 
-## 作者自定义
+- `projects/<project-id>/interaction/actions.json`
+- `projects/<project-id>/interaction/regions.json`
+- `projects/<project-id>/interaction/map.svg`
 
-不要直接在扩展代码中写剧情规则。回到项目源目录编辑：
+只有需要改变通用交互工作流或 UI 逻辑时，才在项目中添加同路径覆盖：
 
-- `interaction/actions.json`
-- `interaction/regions.json`
-- `interaction/map.svg`
-- `skills/interaction-system/SKILL.md`（需要改变交互状态规则时）
+- `projects/<project-id>/skills/interaction-system/SKILL.md`
+- `projects/<project-id>/extensions/interaction-runtime/`
 
-然后重新运行 `python scripts/generate.py`。
+项目未提供覆盖时，生成器自动使用根目录的通用 Skill 和扩展运行时。
 
-扩展优先使用官方 `api.agent` 与 `api.skill`。`api.chat`、`api.worldInfo` 和移动布局契约存在时自动增强，不存在时相应功能会隐藏或退化，不会阻止 Agent 正常写作。
+## 运行要点
 
-交互资源与界面投影均为 JSON，扩展仅使用浏览器原生 `JSON.parse()`，不需要 SillyTavern/TauriTavern 提供 YAML 或其它解析库。
+- 地图元素的 `data-region-id` 必须对应 `regions.json` 中的区域 ID。
+- Agent 成功提交后，扩展读取 `output/main.md`、`persist/character_states.json` 和 `persist/interaction-state.json`。
+- 界面缓存只用于恢复展示，不替代 Agent workspace 中的权威文件。
+- 若聊天中仍出现可见的 `[交互行动]`，替换旧扩展和 Skill 后完全重启 TauriTavern。
