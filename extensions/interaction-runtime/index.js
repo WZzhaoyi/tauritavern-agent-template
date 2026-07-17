@@ -104,7 +104,7 @@ function activeCharacterSkillScope() {
   const card = context.characters?.[context.characterId];
   const avatar = typeof card?.avatar === 'string' ? card.avatar : '';
   const characterId = avatar.replace(/\.[^.]+$/, '') || card?.name;
-  return characterId ? { kind: 'character', id: characterId } : null;
+  return characterId ? { kind: 'character', characterId } : null;
 }
 
 function projectConfig() {

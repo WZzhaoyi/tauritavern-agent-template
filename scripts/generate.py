@@ -5,7 +5,7 @@ TauriTavern Agent 生成器
 版本: 2.7.0
 
 按 build.target 生成互斥的运行目标产物：
-  - agent     → Agent Profile + SKILLS + Agent 角色卡 + 可选交互扩展 + 主题
+  - agent     → Agent Profile + SKILLS + Agent 角色卡 + 主题
   - non_agent → legacy 角色卡 + 可选状态世界书
 """
 
@@ -957,33 +957,7 @@ class AgentGenerator:
         print(f"  [OK] agent-overrides.css")
         return str(dst)
 
-    # ── 可选交互扩展 ────────────────────────────────────────
-
-    def copy_interaction_extension(self) -> Optional[str]:
-        """复制一次安装即可服务所有带角色卡标记项目的通用运行时。"""
-        if not self.interaction_cfg["enabled"]:
-            return None
-
-        source_dir = self._source_path("extensions/interaction-runtime")
-        if not source_dir.exists():
-            raise FileNotFoundError(f"Missing interaction runtime: {source_dir}")
-
-        extension_id = "tauritavern-interaction"
-        destination = self.output_dir / "extensions" / extension_id
-        legacy_destination = (
-            self.output_dir / "extensions" / f"{self.project_id}-interaction"
-        )
-        if legacy_destination != destination and legacy_destination.exists():
-            shutil.rmtree(legacy_destination)
-        if destination.exists():
-            shutil.rmtree(destination)
-        shutil.copytree(source_dir, destination)
-        license_file = self._source_path("LICENSE")
-        if license_file.exists():
-            shutil.copy2(license_file, destination / "LICENSE")
-
-        print(f"  [OK] extensions/{extension_id}/")
-        return str(destination)
+    # ── 项目世界书与旧产物清理 ──────────────────────────────────
 
     def copy_project_lorebooks(self) -> List[str]:
         """原样复制作者维护的传统世界书，方便具体项目与套件一起分发。"""
@@ -1007,26 +981,29 @@ class AgentGenerator:
             copied.append(str(target))
         return copied
 
-    def prune_disabled_interaction_outputs(self) -> None:
-        """开关关闭后移除上一次 Agent 构建留下的可选交互产物。"""
-        if self.interaction_cfg["enabled"]:
-            return
-        skill_archives = (
-            self.output_dir / "skills" / "interaction-system.ttskill",
-            self.output_dir
-            / "skills"
-            / f"{self._packaged_skill_name(self.INTERACTION_SKILL_ID)}.ttskill",
-        )
+    def prune_stale_interaction_outputs(self) -> None:
+        """移除已停用的交互 Skill 和旧版项目级扩展产物。"""
+        if not self.interaction_cfg["enabled"]:
+            skill_archives = (
+                self.output_dir / "skills" / "interaction-system.ttskill",
+                self.output_dir
+                / "skills"
+                / f"{self._packaged_skill_name(self.INTERACTION_SKILL_ID)}.ttskill",
+            )
+            for skill_archive in skill_archives:
+                if skill_archive.exists():
+                    skill_archive.unlink()
+
+        extensions_root = self.output_dir / "extensions"
         extension_dirs = (
-            self.output_dir / "extensions" / f"{self.project_id}-interaction",
-            self.output_dir / "extensions" / "tauritavern-interaction",
+            extensions_root / f"{self.project_id}-interaction",
+            extensions_root / "tauritavern-interaction",
         )
-        for skill_archive in skill_archives:
-            if skill_archive.exists():
-                skill_archive.unlink()
         for extension_dir in extension_dirs:
             if extension_dir.exists():
                 shutil.rmtree(extension_dir)
+        if extensions_root.exists() and not any(extensions_root.iterdir()):
+            extensions_root.rmdir()
 
     # ── 汇总输出 ──────────────────────────────────────────────
 
@@ -1037,7 +1014,7 @@ class AgentGenerator:
 
         validated_skills = None
         if self.build_target == "agent":
-            self.prune_disabled_interaction_outputs()
+            self.prune_stale_interaction_outputs()
             print("[验证] SKILLS ...")
             validated_skills = self.validate_skills()
             for v in validated_skills:
@@ -1083,10 +1060,6 @@ class AgentGenerator:
             self.copy_project_lorebooks()
 
         if self.build_target == "agent":
-            if self.interaction_cfg["enabled"]:
-                print("\n[生成] 暂停式交互扩展 ...")
-                self.copy_interaction_extension()
-
             print("\n[生成] 主题 ...")
             self.copy_theme()
 
@@ -1114,7 +1087,7 @@ class AgentGenerator:
             )
             if self.interaction_cfg["enabled"]:
                 steps.append(
-                    "按 extensions/tauritavern-interaction/README.md 安装通用交互扩展"
+                    "确保已安装模板根目录 extensions/interaction-runtime/ 通用交互扩展"
                 )
             if self.lorebooks_dir.exists() and any(self.lorebooks_dir.glob("*.json")):
                 steps.append("导入 lorebooks/ 下的传统世界书并绑定角色卡或聊天")

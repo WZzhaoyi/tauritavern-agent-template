@@ -29,12 +29,11 @@ projects/<project-id>/         项目维护
 ├── lorebooks/                 世界书
 ├── interaction/               行动、区域、地图
 ├── skills/                    可选项目 Skill 或覆盖
-├── extensions/                可选项目专用扩展
 ├── theme/                     可选项目主题覆盖
 └── output/                    生成产物
 ```
 
-项目缺少通用 Skill、扩展运行时或主题时，生成器从模板根目录读取。项目规则优先使用配置和声明式素材；只有确实需要独有运行逻辑时才覆盖扩展。
+项目缺少通用 Skill 或主题时，生成器从模板根目录读取。交互扩展从根目录独立安装，不进入项目产物；项目规则使用配置、世界书或项目 Skill 表达。
 
 ## 工作步骤
 
@@ -123,6 +122,16 @@ description: 一句话描述
 - `interaction/regions.json`：地点和区域。
 - `interaction/map.svg`：可选地图；可点击元素的 `data-region-id` 必须匹配区域 ID。
 
+动态行动由 Agent 按打包后的 `interaction-system` Skill 生成；`actions.json` 只提供预设与回退行动，不会自动变成作品专属提示词。通用 Skill 只定义交互协议和回合事务。具体作品对下一轮选项有特殊要求时：
+
+1. 以根目录 `skills/interaction-system/SKILL.md` 为基础，在 `projects/<project-id>/skills/interaction-system/SKILL.md` 创建项目覆盖。
+2. 保留通用 Skill 的输入协议、状态文件、`workspace.commit` 和 `workspace.finish` 约定，只补充“项目行动策略”。
+3. 在策略中明确：选项数量与类型、允许的 `scope`、稳定 ID 命名、哪些行动需要 `confirm`，以及何时使用 `disabled` 与 `disabled_reason`。
+4. 说明作品边界：选项只基于当前轮可知事实，不剧透、不预设结果、不替玩家做最终选择，并保留与作品节奏相符的观察、等待、离开或自由行动空间。
+5. 无法生成可靠动态选项时写入 `"actions": []`，让界面回退到 `assets/actions.json`；不要写入缺少 `id` 或 `label` 的非空数组。
+
+项目的 `AGENTS.md` 应记录是否使用通用行动策略；若有覆盖，只记录维护边界和素材来源，实际 Agent 提示必须写入项目 `interaction-system` Skill。人物、地点和剧情事实仍放在世界书，不复制进 Skill。
+
 普通聊天输入和交互面板中的自定义行动输入始终有效。项目规则放在配置、世界书或项目 Skill 中，不写入通用扩展 JavaScript。
 
 ### 5. 构建
@@ -133,7 +142,7 @@ python scripts/generate.py projects/<project-id>
 
 | 目标 | 输出 |
 |---|---|
-| `agent` | `output/agent/`：角色卡、Profile、Skills、可选扩展、主题和世界书 |
+| `agent` | `output/agent/`：角色卡、Profile、Skills、主题和世界书 |
 | `non_agent` | `output/non-agent/`：角色卡和可选状态世界书 |
 
 ## 运行约定
@@ -201,7 +210,7 @@ node --check extensions/interaction-runtime/index.js
 | 框架版本不匹配 | 检查迁移后更新项目 `framework.version` |
 | Agent 不读状态 Skill | 是否把最新的 `<project-id>-state-system.ttskill` 导入当前角色卡的角色作用域 |
 | Agent 不发布正文 | Profile 是否启用 workspace commit |
-| 点击行动无效 | 是否安装通用生成扩展，并把 `<project-id>-interaction-system.ttskill` 导入当前角色卡的角色作用域 |
+| 点击行动无效 | 是否已安装根目录通用交互扩展，并把 `<project-id>-interaction-system.ttskill` 导入当前角色卡的角色作用域 |
 | 地图不能点击 | SVG `data-region-id` 是否匹配 `regions.json` |
 | 非 Agent 状态不保存 | 是否安装 legacy 状态运行时 |
 | 世界书未生效 | 检查关键词、递归、绑定和激活状态 |

@@ -21,3 +21,5 @@ python scripts/generate.py projects/hongloumeng
 结果位于 `projects/hongloumeng/output/agent/`。
 
 先导入角色卡；导入生成的 `.ttskill` 时，把目标作用域设为该角色卡。不要安装到全局、预设或 Profile 作用域。
+
+交互界面使用模板根目录 `extensions/interaction-runtime/` 通用扩展，无需从项目产物重复安装。

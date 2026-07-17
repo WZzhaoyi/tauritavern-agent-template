@@ -79,6 +79,9 @@ class HongloumengProjectTest(unittest.TestCase):
             self.assertIn(f"产物目录：{output}/", build_output)
             self.assertIn("把导入目标设为刚导入的角色卡", build_output)
             self.assertIn("不要导入到全局、预设或 Profile 作用域", build_output)
+            self.assertIn("extensions/interaction-runtime/", build_output)
+            self.assertNotIn("[生成] 暂停式交互扩展", build_output)
+            self.assertFalse((output / "extensions").exists())
             card = json.loads(
                 (output / "hongloumeng-garden.character-card.json")
                 .read_text(encoding="utf-8")
@@ -146,42 +149,6 @@ class HongloumengProjectTest(unittest.TestCase):
             self.assertIsNone(profile["instructions"]["agentSystemPrompt"])
             self.assertEqual(["*"], profile["skills"]["visible"])
             self.assertEqual([], profile["skills"]["deny"])
-
-            extension = output / "extensions" / "tauritavern-interaction"
-            self.assertTrue((extension / "manifest.json").exists())
-            self.assertTrue((extension / "LICENSE").exists())
-            self.assertFalse((extension / "package-config.js").exists())
-            extension_code = (extension / "index.js").read_text(encoding="utf-8")
-            self.assertNotIn("import config", extension_code)
-            self.assertIn("activeCardConfig", extension_code)
-            self.assertIn("activeCharacterSkillScope", extension_code)
-            self.assertIn("readFile({ scope, name: skillName", extension_code)
-            self.assertIn("JSON.parse", extension_code)
-            self.assertNotIn("libs?.yaml", extension_code)
-            self.assertNotIn("/send", extension_code)
-            self.assertIn("quiet_prompt: runtime.lastActionRecord", extension_code)
-            self.assertIn("quietToLoud: true", extension_code)
-            self.assertIn("presentation: 'background'", extension_code)
-            self.assertIn("<tt_interaction_input", extension_code)
-            self.assertIn("runtime.runCommitted", extension_code)
-            self.assertIn("请更换 API", extension_code)
-            self.assertIn("model\\.tool_call_required", extension_code)
-            self.assertIn("readWorkspaceFile", extension_code)
-            self.assertIn("agent.listRuns", extension_code)
-            self.assertIn("renderNarrative", extension_code)
-            self.assertIn("renderBriefing", extension_code)
-            self.assertIn("waifuMode", extension_code)
-            self.assertIn("custom_input", extension_code)
-            self.assertIn("submitCustomAction", extension_code)
-            extension_css = (extension / "style.css").read_text(encoding="utf-8")
-            self.assertIn("grid-template-columns: minmax(0, 1fr)", extension_css)
-            self.assertIn("data-open", extension_css)
-            self.assertIn("data-vn-mode", extension_css)
-            self.assertIn("tt-interaction-progress", extension_css)
-            self.assertLess(
-                extension_code.index("store.listKeys"),
-                extension_code.index("store.getJson"),
-            )
 
             archive = (
                 output

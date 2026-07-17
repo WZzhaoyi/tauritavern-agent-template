@@ -23,7 +23,7 @@ python scripts/generate.py projects/<project-id>
 
 | `build.target` | 输出目录 | 主要产物 |
 |---|---|---|
-| `agent` | `output/agent/` | 角色卡、Agent Profile、Skills、可选交互扩展 |
+| `agent` | `output/agent/` | 角色卡、Agent Profile、Skills、主题和世界书 |
 | `non_agent` | `output/non-agent/` | 角色卡、可选状态世界书 |
 
 两种目标的运行时状态互不兼容，不要在同一聊天中直接互换。
@@ -36,7 +36,7 @@ Agent 目标：
 2. 在 Agent 系统面板导入 `skills/*.ttskill`，并把导入目标设为刚导入角色卡的“角色”作用域。不要把项目产物安装到全局、预设或 Profile 作用域。安装名为 `<project-id>-<skill-id>`，可与其它项目共存。
 3. 导入并启用 `*.agent-profile.json`。
 4. 开启 Agent Mode。
-5. 如启用交互，安装 `extensions/tauritavern-interaction/`；同一份通用扩展可服务多个项目。
+5. 如启用交互，一次性安装模板根目录 `extensions/interaction-runtime/`；项目产物不重复包含扩展。
 6. 导入并绑定 `lorebooks/` 中的世界书。
 
 角色卡中的 `skillInstallScope` 和 `requiredSkills` 是模板导入清单，不会替用户执行安装，也不是运行时白名单。Profile 保持 `skills.visible: ["*"]`、`deny: []`，用户其它经当前运行解析为可见的 Skills 仍可按需使用。
@@ -60,7 +60,6 @@ projects/<project-id>/
 ├── lorebooks/
 ├── interaction/
 ├── skills/           # 可选项目 Skill 或覆盖
-├── extensions/       # 可选项目扩展覆盖
 ├── theme/            # 可选项目主题覆盖
 └── output/
 ```
@@ -71,7 +70,7 @@ projects/<project-id>/
 - `literature/scenarios/`：首条消息和备选开场。
 - `lorebooks/`：角色、地点、关系和世界事实。
 - `interaction/`：可选行动、区域和 SVG 地图。
-- `skills/`、`extensions/`、`theme/`：仅在项目需要独有能力时使用；默认继承根目录通用资源。
+- `skills/`、`theme/`：仅在项目需要独有能力时使用；默认继承根目录通用资源。
 
 配置字段和默认值见 [tauritavern.template.yaml](tauritavern.template.yaml)，完整创作约束见 [AGENTS.md](AGENTS.md)。
 
