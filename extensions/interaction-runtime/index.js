@@ -1,5 +1,11 @@
 const ROOT_ID = 'tt-interaction-runtime';
-const CACHE_KEYS = ['interaction-state', 'character-state', 'narrative'];
+const CACHE_KEYS = [
+  'interaction-state',
+  'character-state',
+  'narrative',
+  'last-action',
+  'lore-activation'
+];
 const TERMINAL_EVENTS = new Set(['run_completed', 'run_failed', 'run_cancelled', 'run_partial_success']);
 const PROGRESS_LABELS = {
   run_created: '准备回合',
@@ -31,8 +37,12 @@ const runtime = {
   dimensions: [],
   narrative: '',
   narrativeRunId: null,
+  loreActivation: null,
+  loreRunId: null,
   stageView: 'map',
   lastActionRecord: null,
+  retryAvailable: false,
+  rerunnableRunId: null,
   pendingActionLabel: null,
   runChatToken: null,
   runStore: null,
@@ -137,7 +147,8 @@ function getUi() {
     customSubmit: root?.querySelector('[data-role="custom-submit"]'),
     lore: root?.querySelector('[data-role="lore"]'),
     cancel: root?.querySelector('[data-role="cancel"]'),
-    retry: root?.querySelector('[data-role="retry"]')
+    retry: root?.querySelector('[data-role="retry"]'),
+    rerun: root?.querySelector('[data-role="rerun"]')
   };
 }
 
@@ -209,7 +220,24 @@ function setBusy(busy) {
   if (cancel) cancel.hidden = !busy;
   if (busy) startProgressTimer();
   else stopProgressTimer();
+  renderRunControls();
   renderStatus();
+}
+
+function renderRunControls() {
+  const { retry, rerun } = getUi();
+  if (retry) retry.hidden = runtime.busy || !runtime.retryAvailable;
+  if (rerun) rerun.hidden = runtime.busy || !runtime.rerunnableRunId;
+}
+
+function invalidateRerunnableAction() {
+  if (runtime.busy) return;
+  runtime.lastActionRecord = null;
+  runtime.pendingActionLabel = null;
+  runtime.retryAvailable = false;
+  runtime.rerunnableRunId = null;
+  renderRunControls();
+  if (runtime.projectConfig) void writeCachedValue('last-action', null);
 }
 
 function createUi() {
@@ -247,6 +275,10 @@ function createUi() {
   retry.type = 'button';
   retry.dataset.role = 'retry';
   retry.hidden = true;
+  const rerun = element('button', '', '重跑上一回合');
+  rerun.type = 'button';
+  rerun.dataset.role = 'rerun';
+  rerun.hidden = true;
   const cancel = element('button', '', '取消');
   cancel.type = 'button';
   cancel.dataset.role = 'cancel';
@@ -254,7 +286,7 @@ function createUi() {
   const close = element('button', '', '返回聊天');
   close.type = 'button';
   close.dataset.role = 'close';
-  controls.append(retry, cancel, close);
+  controls.append(retry, rerun, cancel, close);
   header.append(brand, controls);
 
   const status = element('div', 'tt-interaction-status', '尚未载入');
@@ -332,6 +364,7 @@ function createUi() {
   close.addEventListener('click', () => togglePanel(false));
   cancel.addEventListener('click', cancelRun);
   retry.addEventListener('click', () => startRun(false));
+  rerun.addEventListener('click', rerunLastTurn);
   narrativeTab.addEventListener('click', () => setStageView('narrative'));
   mapTab.addEventListener('click', () => setStageView('map'));
   customSubmit.addEventListener('click', submitCustomAction);
@@ -373,8 +406,12 @@ function refreshVisibility() {
     runtime.dimensions = [];
     runtime.narrative = '';
     runtime.narrativeRunId = null;
+    runtime.loreActivation = null;
+    runtime.loreRunId = null;
     runtime.stageView = 'map';
     runtime.lastActionRecord = null;
+    runtime.retryAvailable = false;
+    runtime.rerunnableRunId = null;
   } else if (!nextConfig && !runtime.busy) {
     runtime.projectConfig = null;
   }
@@ -386,6 +423,7 @@ function refreshVisibility() {
     runtime.opened = false;
     root.removeAttribute('data-open');
   }
+  renderRunControls();
 }
 
 async function readSkillText(path, optional = false, skillName = projectConfig().skillName) {
@@ -429,7 +467,7 @@ async function loadInterface() {
     renderNarrative();
     renderBriefing();
     setStageView(runtime.narrative ? 'narrative' : 'map');
-    await renderLore();
+    await renderLore(runtime.narrativeRunId);
     setStatus('请选择目标与行动', 'ready');
   } catch (error) {
     console.error('[TauriTavern Interaction] load failed', error);
@@ -728,10 +766,21 @@ async function queueAction(record, label) {
     '不得在过程叙述、output/main.md 或聊天正文中引用、转录或解释本标签与 JSON。',
     `<tt_interaction_input version="1">${JSON.stringify(record)}</tt_interaction_input>`
   ].join('\n');
+  runtime.retryAvailable = false;
+  runtime.rerunnableRunId = null;
+  renderRunControls();
   await startRun(true);
 }
 
-async function startRun(writeAction) {
+async function rerunLastTurn() {
+  if (runtime.busy || !runtime.lastActionRecord || !runtime.rerunnableRunId) return;
+  if (!window.confirm('重跑会替换聊天中的上一条回复，并从该回合前的状态重新生成。是否继续？')) return;
+  runtime.retryAvailable = false;
+  runtime.rerunnableRunId = null;
+  await startRun(false, 'regenerate');
+}
+
+async function startRun(writeAction, generationType = 'normal') {
   if (runtime.busy || !runtime.lastActionRecord) return;
   const agent = ttApi()?.agent;
   if (!agent?.startRunFromLegacyGenerate || !agent?.subscribe) {
@@ -742,9 +791,12 @@ async function startRun(writeAction) {
   setBusy(true);
   runtime.runStartedAt = Date.now();
   runtime.runCommitted = false;
-  const { retry } = getUi();
-  if (retry) retry.hidden = true;
-  setStatus(writeAction ? '启动 Agent 回合' : '重新启动本回合', 'busy');
+  setStatus(
+    generationType === 'regenerate'
+      ? '重跑上一回合'
+      : writeAction ? '启动 Agent 回合' : '重新启动本回合',
+    'busy'
+  );
 
   try {
     runtime.unsubscribe?.();
@@ -758,7 +810,7 @@ async function startRun(writeAction) {
     runtime.runChatToken = currentChatToken();
     runtime.runStore = await chatStore();
     const run = await agent.startRunFromLegacyGenerate({
-      generationType: 'normal',
+      generationType,
       generateOptions: {
         quiet_prompt: runtime.lastActionRecord,
         quietToLoud: true
@@ -777,7 +829,8 @@ async function startRun(writeAction) {
   } catch (error) {
     console.error('[TauriTavern Interaction] run start failed', error);
     setBusy(false);
-    if (retry) retry.hidden = !runtime.lastActionRecord;
+    runtime.retryAvailable = Boolean(runtime.lastActionRecord);
+    renderRunControls();
     setStatus(`启动失败：${error.message}`, 'error');
   }
 }
@@ -800,8 +853,9 @@ async function handleRunEvent(event) {
 
   runtime.unsubscribe?.();
   runtime.unsubscribe = null;
+  runtime.retryAvailable = false;
+  runtime.rerunnableRunId = null;
   setBusy(false);
-  const { retry } = getUi();
   const sameChat = runtime.runChatToken === currentChatToken();
 
   if (event.type === 'run_completed') {
@@ -813,17 +867,18 @@ async function handleRunEvent(event) {
         : refreshNarrativeFromRun(runtime.runId, sameChat, runtime.runStore)
     ]);
     if (!runtime.runCommitted) {
-      if (retry) retry.hidden = false;
+      runtime.retryAvailable = true;
+      runtime.rerunnableRunId = null;
       if (sameChat) {
         setStatus('Agent 已结束，但未通过 workspace.commit 发布剧情；可重试本回合', 'error');
       }
     } else {
-      runtime.lastActionRecord = null;
-      runtime.pendingActionLabel = null;
-      if (retry) retry.hidden = true;
+      runtime.retryAvailable = false;
+      runtime.rerunnableRunId = runtime.runId;
+      await cacheLastSuccessfulAction(runtime.runStore);
     }
     if (sameChat && runtime.runCommitted) {
-      await renderLore();
+      await renderLore(runtime.runId, runtime.runStore);
       setStatus('回合完成；可阅读剧情、查看地图或继续行动', 'ready');
     }
   } else if (event.type === 'run_partial_success') {
@@ -834,15 +889,19 @@ async function handleRunEvent(event) {
         ? Promise.resolve()
         : refreshNarrativeFromRun(runtime.runId, sameChat, runtime.runStore)
     ]);
-    runtime.lastActionRecord = null;
-    runtime.pendingActionLabel = null;
-    if (retry) retry.hidden = true;
+    runtime.retryAvailable = false;
+    runtime.rerunnableRunId = runtime.runId;
+    await cacheLastSuccessfulAction(runtime.runStore);
     if (sameChat) {
       setStatus('剧情已发布，但状态收尾失败；请返回聊天检查本回合', 'error');
     }
   } else {
-    if (!sameChat) runtime.lastActionRecord = null;
-    if (retry) retry.hidden = !runtime.lastActionRecord;
+    if (!sameChat) {
+      runtime.lastActionRecord = null;
+      runtime.pendingActionLabel = null;
+    }
+    runtime.retryAvailable = Boolean(sameChat && runtime.lastActionRecord);
+    runtime.rerunnableRunId = null;
     if (sameChat) {
       const message = event.type === 'run_failed'
         ? formatRunFailure(event)
@@ -852,6 +911,7 @@ async function handleRunEvent(event) {
   }
   runtime.runStartedAt = null;
   runtime.runStore = null;
+  renderRunControls();
   refreshVisibility();
 }
 
@@ -946,7 +1006,32 @@ async function loadCachedState() {
       runtime.narrative = cached.narrative.text;
       runtime.narrativeRunId = cached.narrative.runId ?? null;
     }
+    const loreActivation = cached['lore-activation'];
+    if (Array.isArray(loreActivation?.entries) && loreActivation.runId) {
+      runtime.loreActivation = loreActivation;
+      runtime.loreRunId = loreActivation.runId;
+    }
+    const lastAction = cached['last-action'];
+    if (
+      typeof lastAction?.prompt === 'string'
+      && lastAction.runId
+      && lastAction.runId === cached.narrative?.runId
+    ) {
+      runtime.lastActionRecord = lastAction.prompt;
+      runtime.pendingActionLabel = lastAction.label ?? null;
+      runtime.rerunnableRunId = lastAction.runId;
+    }
+    renderRunControls();
   } catch {}
+}
+
+async function cacheLastSuccessfulAction(store) {
+  if (!runtime.lastActionRecord || !runtime.runId) return;
+  await writeCachedValue('last-action', {
+    runId: runtime.runId,
+    prompt: runtime.lastActionRecord,
+    label: runtime.pendingActionLabel
+  }, store);
 }
 
 async function hydrateFromLatestRun() {
@@ -995,27 +1080,87 @@ async function writeCachedValue(key, value, storeOverride = null) {
   }
 }
 
-async function renderLore() {
+function normalizeLoreActivation(activation, runId, source) {
+  return {
+    runId,
+    source,
+    entries: (activation?.entries ?? []).map(entry => ({
+      world: entry.world,
+      uid: entry.uid,
+      displayName: entry.displayName ?? entry.comment ?? `${entry.world ?? '世界书'} #${entry.uid ?? '?'}`,
+      constant: Boolean(entry.constant)
+    }))
+  };
+}
+
+async function readRunLoreActivation(runId) {
+  const agent = ttApi()?.agent;
+  if (!runId || !agent?.readWorkspaceFile) return null;
+  const path = 'input/prompt_snapshot.json';
+  const file = await agent.readWorkspaceFile({ runId, path });
+  const snapshot = parseJson(file.text, path);
+  const activation = snapshot.worldInfoActivation
+    ?? snapshot.frozenRunInputSnapshot?.worldInfoActivation;
+  if (!activation || !Array.isArray(activation.entries)) {
+    throw new Error('该 Agent 回合没有 worldInfoActivation 快照');
+  }
+  return normalizeLoreActivation(activation, runId, 'agent-run');
+}
+
+async function resolveLoreActivation(runId, cacheStore) {
+  if (runId && runtime.loreRunId === runId && runtime.loreActivation) {
+    return runtime.loreActivation;
+  }
+  if (runId) {
+    const activation = await readRunLoreActivation(runId);
+    if (!activation) throw new Error('当前宿主不支持读取 Agent 回合快照');
+    runtime.loreActivation = activation;
+    runtime.loreRunId = runId;
+    await writeCachedValue('lore-activation', activation, cacheStore);
+    return activation;
+  }
+
+  const worldInfo = ttApi()?.worldInfo;
+  if (!worldInfo?.getLastActivation) return null;
+  const activation = await worldInfo.getLastActivation();
+  return normalizeLoreActivation(activation, null, 'legacy');
+}
+
+async function renderLore(runId = runtime.narrativeRunId, cacheStore = null) {
   const { lore } = getUi();
   if (!lore) return;
   lore.replaceChildren();
   const worldInfo = ttApi()?.worldInfo;
-  if (!worldInfo?.getLastActivation || !worldInfo?.openEntry) {
+  const canReadRun = Boolean(runId && ttApi()?.agent?.readWorkspaceFile);
+  if (!canReadRun && !worldInfo?.getLastActivation) {
     lore.closest('.tt-interaction-section').hidden = true;
     return;
   }
   lore.closest('.tt-interaction-section').hidden = false;
   try {
-    const activation = await worldInfo.getLastActivation();
+    const activation = await resolveLoreActivation(runId, cacheStore);
     for (const entry of activation?.entries ?? []) {
       const button = element('button', 'tt-interaction-lore-entry', entry.displayName);
       button.type = 'button';
-      button.addEventListener('click', () => worldInfo.openEntry({ world: entry.world, uid: entry.uid }));
+      if (worldInfo?.openEntry && entry.world !== undefined && entry.uid !== undefined) {
+        button.addEventListener('click', () => worldInfo.openEntry({ world: entry.world, uid: entry.uid }));
+      } else {
+        button.disabled = true;
+      }
       lore.append(button);
     }
-    if (!lore.childElementCount) lore.append(element('span', 'tt-interaction-empty', '暂无激活条目'));
+    if (!lore.childElementCount) {
+      lore.append(element(
+        'span',
+        'tt-interaction-empty',
+        runId ? '本轮未激活世界书条目' : '尚无 Agent 回合快照'
+      ));
+    }
   } catch (error) {
-    lore.append(element('span', 'tt-interaction-empty', '世界书入口暂不可用'));
+    console.warn('[TauriTavern Interaction] lore activation refresh failed', error);
+    const message = element('span', 'tt-interaction-empty', '无法读取本轮设定快照');
+    message.title = error.message;
+    lore.append(message);
   }
 }
 
@@ -1029,15 +1174,35 @@ async function initialize() {
   });
   window.addEventListener('resize', syncPresentationMode);
   const context = stContext();
+  const invalidateEvents = [
+    'MESSAGE_SENT',
+    'MESSAGE_RECEIVED',
+    'MESSAGE_DELETED',
+    'MESSAGE_EDITED',
+    'MESSAGE_SWIPED'
+  ];
+  for (const eventName of invalidateEvents) {
+    const eventType = context?.event_types?.[eventName];
+    if (context?.eventSource && eventType) {
+      context.eventSource.on(eventType, invalidateRerunnableAction);
+    }
+  }
   if (context?.eventSource && context?.event_types?.CHAT_CHANGED) {
     context.eventSource.on(context.event_types.CHAT_CHANGED, () => {
       runtime.state = null;
       runtime.characterState = null;
       runtime.narrative = '';
       runtime.narrativeRunId = null;
+      runtime.loreActivation = null;
+      runtime.loreRunId = null;
       runtime.stageView = 'map';
       runtime.selectedTarget = null;
-      if (!runtime.busy) runtime.lastActionRecord = null;
+      if (!runtime.busy) {
+        runtime.lastActionRecord = null;
+        runtime.pendingActionLabel = null;
+        runtime.retryAvailable = false;
+        runtime.rerunnableRunId = null;
+      }
       refreshVisibility();
       renderNarrative();
       renderBriefing();
