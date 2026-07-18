@@ -868,6 +868,10 @@ class AgentGenerator:
     def generate_agent_profile(self) -> dict:
         agent_cfg = self.cfg.get("agent", {})
 
+        tool_mode = agent_cfg.get("tool_mode", "full")
+        if tool_mode not in {"full", "focused"}:
+            raise ValueError("agent.tool_mode must be 'full' or 'focused'")
+
         tools = [
             "chat.search",
             "chat.read_messages",
@@ -883,6 +887,14 @@ class AgentGenerator:
             "workspace.commit",
             "workspace.finish",
         ]
+        if tool_mode == "focused":
+            discovery_tools = {
+                "skill.list",
+                "skill.search",
+                "workspace.list_files",
+                "workspace.search_files",
+            }
+            tools = [tool for tool in tools if tool not in discovery_tools]
         if agent_cfg.get("enable_dice", True):
             tools.append("dice.roll")
 
