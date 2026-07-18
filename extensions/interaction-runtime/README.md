@@ -27,5 +27,7 @@
 
 - 地图元素的 `data-region-id` 必须对应 `regions.json` 中的区域 ID。
 - Agent 成功提交后，扩展读取 `output/main.md` 和 `persist/interaction-state.json`；声明角色状态维度时再读取对应角色状态文件。
+- “本轮设定”按正文对应的 Agent `runId` 读取 `input/prompt_snapshot.json` 中的 `worldInfoActivation`；不使用普通生成流程的全局最近激活记录代替本轮快照。
 - 预设行动与面板自由输入使用同一回合流程；自由输入支持 `Ctrl/Cmd+Enter` 提交。
+- 成功回合可在面板顶部选择“重跑上一回合”。它使用宿主的 `regenerate` 流程替换上一条回复，不会在已推进状态上将行动再执行一次。
 - 界面缓存只用于恢复展示，不替代 Agent workspace 中的权威文件。

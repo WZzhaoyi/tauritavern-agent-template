@@ -52,6 +52,7 @@ projects/<project-id>/         项目维护
 - `dimensions` 可为空；定义维度时，`stages` 数量必须等于 `ranges` 长度减一。
 - `build.target` 只能是 `agent` 或 `non_agent`。
 - `interaction.enabled` 只影响 Agent 构建。
+- `agent.tool_mode` 默认为 `full`；启用骰子时授予 14 个通用工具。已知精确 Skill 名和工作区路径、并希望减少模型发现开销时可设为 `focused`；它仅移除 `skill.list/search` 和 `workspace.list_files/search_files`，保留聊天回查、世界书、精确 Skill 读取、工作区读写/局部补丁/提交/结束与骰子，共 10 个工具。
 - 素材和输出目录使用固定约定，不在配置中重定义路径。
 - `skills:` 只表示随套件打包的 Skills，不是运行时白名单。
 - Agent Profile 的 `agentSystemPrompt` 保持 `null`，`skills.visible` 保持 `["*"]`。

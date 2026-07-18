@@ -74,6 +74,15 @@ projects/<project-id>/
 
 配置字段和默认值见 [tauritavern.template.yaml](tauritavern.template.yaml)，完整创作约束见 [AGENTS.md](AGENTS.md)。
 
+Agent Profile 默认使用 `agent.tool_mode: full`，启用骰子时保留全部 14 个通用工具。固定事务型项目如果已在角色卡中给出精确 Skill 名和文件路径，可使用：
+
+```yaml
+agent:
+  tool_mode: focused
+```
+
+`focused` 仅移除 `skill.list`、`skill.search`、`workspace.list_files` 和 `workspace.search_files`，将工具数减为 10；聊天回查、`workspace.apply_patch` 与完整发布事务仍可用。
+
 ## 模板更新
 
 下游仓库每周检查源模板并创建同步 PR，不自动合并。首次使用前需在 GitHub 的 **Settings → Actions → General → Workflow permissions** 中允许 Actions 创建 Pull Request。

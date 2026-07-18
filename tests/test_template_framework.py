@@ -129,12 +129,23 @@ class TemplateFrameworkTest(unittest.TestCase):
         self.assertNotIn("/send", extension_code)
         self.assertIn("quiet_prompt: runtime.lastActionRecord", extension_code)
         self.assertIn("quietToLoud: true", extension_code)
+        self.assertIn("generationType === 'regenerate'", extension_code)
+        self.assertIn("rerunLastTurn", extension_code)
+        self.assertIn("重跑上一回合", extension_code)
+        self.assertIn("cacheLastSuccessfulAction", extension_code)
+        self.assertIn("MESSAGE_RECEIVED", extension_code)
+        self.assertIn("invalidateRerunnableAction", extension_code)
         self.assertIn("presentation: 'background'", extension_code)
         self.assertIn("<tt_interaction_input", extension_code)
         self.assertIn("runtime.runCommitted", extension_code)
         self.assertIn("请更换 API", extension_code)
         self.assertIn("model\\.tool_call_required", extension_code)
         self.assertIn("readWorkspaceFile", extension_code)
+        self.assertIn("input/prompt_snapshot.json", extension_code)
+        self.assertIn("worldInfoActivation", extension_code)
+        self.assertIn("readRunLoreActivation", extension_code)
+        self.assertIn("本轮未激活世界书条目", extension_code)
+        self.assertIn("无法读取本轮设定快照", extension_code)
         self.assertIn("agent.listRuns", extension_code)
         self.assertIn("renderNarrative", extension_code)
         self.assertIn("renderBriefing", extension_code)
@@ -180,8 +191,60 @@ class TemplateFrameworkTest(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(8, profile["tools"]["maxRounds"])
-            self.assertEqual(20, profile["tools"]["maxCallsPerRun"])
+            self.assertEqual(12, profile["tools"]["maxRounds"])
+            self.assertEqual(30, profile["tools"]["maxCallsPerRun"])
+            self.assertEqual(
+                {
+                    "chat.search",
+                    "chat.read_messages",
+                    "worldinfo.read_activated",
+                    "skill.list",
+                    "skill.search",
+                    "skill.read",
+                    "workspace.list_files",
+                    "workspace.search_files",
+                    "workspace.read_file",
+                    "workspace.write_file",
+                    "workspace.apply_patch",
+                    "workspace.commit",
+                    "workspace.finish",
+                    "dice.roll",
+                },
+                set(profile["tools"]["allow"]),
+            )
+
+    def test_focused_agent_tool_mode_keeps_recovery_and_transaction_tools(self):
+        with tempfile.TemporaryDirectory(prefix="tauritavern-focused-tools-") as tmp:
+            project = Path(tmp)
+            config = (REPO_ROOT / "tauritavern.template.yaml").read_text(
+                encoding="utf-8"
+            ).replace("tool_mode: full", "tool_mode: focused", 1)
+            (project / "tauritavern.yaml").write_text(config, encoding="utf-8")
+
+            AgentGenerator(str(project), str(REPO_ROOT)).run()
+            profile = json.loads(
+                (
+                    project
+                    / "output"
+                    / "agent"
+                    / "my-card-writer.agent-profile.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                {
+                    "chat.search",
+                    "chat.read_messages",
+                    "worldinfo.read_activated",
+                    "skill.read",
+                    "workspace.read_file",
+                    "workspace.write_file",
+                    "workspace.apply_patch",
+                    "workspace.commit",
+                    "workspace.finish",
+                    "dice.roll",
+                },
+                set(profile["tools"]["allow"]),
+            )
 
     def test_interaction_can_run_without_character_dimensions(self):
         with tempfile.TemporaryDirectory(prefix="tauritavern-stateless-ui-") as tmp:

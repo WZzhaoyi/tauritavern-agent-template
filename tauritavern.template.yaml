@@ -81,9 +81,12 @@ state_system:
 # Profile 对 Skills 使用 visible: ["*"]；声明维度时，项目专属 state-system 的必读性由角色卡桥接指令保证。
 # =============================================================================
 agent:
-  max_rounds: 8
-  max_tool_calls: 20
+  # 预留读取、写入、提交和结束的完整事务窗口；避免较弱的工具模型在写入后来不及发布。
+  max_rounds: 12
+  max_tool_calls: 30
   model_retries: 2
+  # full 默认授予 14 个通用工具；focused 移除 Skill 和 workspace 的 list/search，启用骰子时保留 10 个。
+  tool_mode: full
   # 子 Agent 默认关闭；此模板不会授予 agent.delegate 等工具。
   # 仅在明确需要随机事件/检定时调用 dice.roll。
   enable_dice: true
